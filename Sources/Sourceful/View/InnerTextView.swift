@@ -18,10 +18,22 @@ import CoreGraphics
 protocol InnerTextViewDelegate: AnyObject {
 	func didUpdateCursorFloatingState()
 }
+struct LineRange{
+    let lineNumber:Int
+    let range:NSRange
+}
+
+public struct TextPosition:Hashable{
+    public let rows:Int
+    public let cols:Int
+    public static let zero = TextPosition(rows: 0, cols: 0)
+}
 
 class InnerTextView: TextView {
 	
 	weak var innerDelegate: InnerTextViewDelegate?
+    
+    var lineRanges:[LineRange] = []
 	
 	var theme: SyntaxColorTheme?
 	
@@ -30,6 +42,15 @@ class InnerTextView: TextView {
 	func invalidateCachedParagraphs() {
 		cachedParagraphs = nil
 	}
+    var langs:[String] = ["en-US","en"]
+    override var textInputMode: UITextInputMode?{
+        get{
+            if let inputMode = UITextInputMode.activeInputModes.first(where: { langs.contains($0.primaryLanguage ?? "") }) {
+                        return inputMode
+                    }
+            return .none
+        }
+    }
 	
 	func hideGutter() {
 		gutterWidth = theme?.gutterStyle.minimumWidth ?? 0.0

@@ -36,13 +36,14 @@ extension SyntaxTextView {
 	}
 	
 	func updateSelectedRange(_ range: NSRange) {
+        print("range:\(range)")
 		textView.selectedRange = range
 		
 		#if os(macOS)		
 		self.textView.scrollRangeToVisible(range)
 		#endif
 		
-		self.delegate?.didChangeSelectedRange(self, selectedRange: range)
+        self.delegate?.didChangeSelectedRange(self, selectedRange: range, textPosition: self.getTextPostion(for: range))
 	}
 	
 	func selectionDidChange() {
@@ -204,7 +205,9 @@ extension SyntaxTextView {
 		open func textViewDidChange(_ textView: UITextView) {
 			
 			didUpdateText()
-			
+            delegate?.didChangeSelectedRange(self, selectedRange: textView.selectedRange, textPosition: self.getTextPostion(for: textView.selectedRange))
+            print("textrange:\(textView.selectedRange)")
+            contentDidChangeSelection()
 		}
 		
 		func refreshColors() {

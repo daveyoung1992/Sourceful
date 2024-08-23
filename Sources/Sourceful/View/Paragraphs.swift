@@ -53,13 +53,13 @@ func generateParagraphs(for textView: InnerTextView, flipRects: Bool = false) ->
 	
 	var paragraphs = [Paragraph]()
 	var i = 0
-	
+    textView.lineRanges = []
 	(textView.text as NSString).enumerateSubstrings(in: range, options: [.byParagraphs]) { (paragraphContent, paragraphRange, enclosingRange, stop) in
 		
 		i += 1
 		
 		let rect = textView.paragraphRectForRange(range: paragraphRange)
-		
+        textView.lineRanges.append(LineRange(lineNumber: i, range: paragraphRange))
 		let paragraph = Paragraph(rect: rect, number: i)
 		paragraphs.append(paragraph)
 		
@@ -91,6 +91,9 @@ func generateParagraphs(for textView: InnerTextView, flipRects: Bool = false) ->
 		
 		i += 1
 		let endParagraph = Paragraph(rect: rect, number: i)
+        if let lastLocation = textView.lineRanges.last?.range.upperBound{
+            textView.lineRanges.append(LineRange(lineNumber: i, range: NSRange(location: lastLocation, length: textView.text.count-lastLocation)))
+        }
 		paragraphs.append(endParagraph)
 		
 	}

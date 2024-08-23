@@ -19,7 +19,7 @@ public protocol SyntaxTextViewDelegate: AnyObject {
 
     func didChangeText(_ syntaxTextView: SyntaxTextView)
 
-    func didChangeSelectedRange(_ syntaxTextView: SyntaxTextView, selectedRange: NSRange)
+    func didChangeSelectedRange(_ syntaxTextView: SyntaxTextView, selectedRange: NSRange, textPosition:TextPosition)
 
     func textViewDidBeginEditing(_ syntaxTextView: SyntaxTextView)
 
@@ -31,7 +31,7 @@ public protocol SyntaxTextViewDelegate: AnyObject {
 public extension SyntaxTextViewDelegate {
     func didChangeText(_ syntaxTextView: SyntaxTextView) { }
 
-    func didChangeSelectedRange(_ syntaxTextView: SyntaxTextView, selectedRange: NSRange) { }
+    func didChangeSelectedRange(_ syntaxTextView: SyntaxTextView, selectedRange: NSRange, textPosition:TextPosition) { }
 
     func textViewDidBeginEditing(_ syntaxTextView: SyntaxTextView) { }
 }
@@ -112,6 +112,24 @@ open class SyntaxTextView: _View {
         super.init(coder: aDecoder)
         setup()
     }
+    
+    public var selectedRange:NSRange{
+        get{
+            textView.selectedRange
+        }
+        set{
+            textView.selectedRange = newValue
+        }
+    }
+    
+    public var isEditable:Bool{
+        get{
+            textView.isEditable
+        }
+        set{
+            textView.isEditable = newValue
+        }
+    }
 
     private static func createInnerTextView() -> InnerTextView {
         let textStorage = NSTextStorage()
@@ -135,6 +153,36 @@ open class SyntaxTextView: _View {
         textStorage.addLayoutManager(layoutManager)
         
         return InnerTextView(frame: .zero, textContainer: textContainer)
+    }
+    
+    func getTextPostion(for range:NSRange)->TextPosition{
+        for item in self.textView.lineRanges{
+            if item.range.location<=range.location && item.range.location+item.range.length>=range.location{
+                return TextPosition(rows: item.lineNumber, cols: range.location-item.range.location+1)
+            }
+        }
+        return .zero
+    }
+    
+    func goLine(_ line:Int){
+        let pos = 0
+        let rows:Int = max(0,line - 1)
+        if self.textView.lineRanges.count > 0{
+            let lineRange:LineRange
+            if rows >= self.textView.lineRanges.count {
+                lineRange = self.textView.lineRanges.last!
+            }
+            else{
+                lineRange = self.textView.lineRanges[rows]
+            }
+            updateSelectedRange(NSRange(location: lineRange.range.location, length: 0))
+            self.becomeFirstResponder()
+        }
+    }
+    
+    func setSeletctTextRange(_ range:NSRange){
+        updateSelectedRange(range)
+        self.becomeFirstResponder()
     }
 
     #if os(macOS)
@@ -221,7 +269,7 @@ open class SyntaxTextView: _View {
         textViewSelectedRangeObserver = contentTextView.observe(\UITextView.selectedTextRange) { [weak self] (textView, value) in
 
             if let `self` = self {
-                self.delegate?.didChangeSelectedRange(self, selectedRange: self.contentTextView.selectedRange)
+                self.delegate?.didChangeSelectedRange(self, selectedRange: self.contentTextView.selectedRange, textPosition: self.getTextPostion(for: self.contentTextView.selectedRange))
             }
 
         }
@@ -273,6 +321,10 @@ open class SyntaxTextView: _View {
     open override func becomeFirstResponder() -> Bool {
         return textView.becomeFirstResponder()
     }
+    
+    open override func resignFirstResponder() -> Bool {
+        return textView.resignFirstResponder()
+    }
     override open var isFirstResponder: Bool {
         return textView.isFirstResponder
     }
@@ -289,19 +341,64 @@ open class SyntaxTextView: _View {
             #endif
         }
         set {
+            if newValue == self.textView.text{
+                return
+            }
             #if os(macOS)
             textView.layer?.isOpaque = true
             textView.string = newValue
             refreshColors()
             #else
             // If the user sets this property as soon as they create the view, we get a strange UIKit bug where the text often misses a final line in some Dynamic Type configurations. The text isn't actually missing: if you background the app then foreground it the text reappears just fine, so there's some sort of drawing sync problem. A simple fix for this is to give UIKit a tiny bit of time to create all its data before we trigger the update, so we push the updating work to the runloop.
+            
             DispatchQueue.main.async {
                 self.textView.text = newValue
                 self.textView.setNeedsDisplay()
                 self.refreshColors()
             }
+//            asyncSetText(newValue)
+//            DispatchQueue.global(qos: .background).async {
+//                DispatchQueue.main.async {
+//                    let bufferSize = 3096
+//                    let start = newValue.startIndex
+//                    var end = newValue.index(start, offsetBy: min(newValue.count,bufferSize))
+////                    self.textView.isEditable
+//                    self.textView.text = String(newValue[start..<end])
+//                    while end < newValue.endIndex{
+//                        end = newValue.index(end, offsetBy: min(newValue.count-,bufferSize))
+//                    }
+//    //                self.textView.selectedRange = self.selectedRange
+//                    self.textView.setNeedsDisplay()
+//                    self.refreshColors()
+//                }
+//            }
             #endif
 
+        }
+    }
+    
+    private func asyncSetText(_ text:String){
+        DispatchQueue.main.async {
+            self.textView.text=""
+        }
+        DispatchQueue.global(qos: .background).async {
+            let bufferSize = 3096
+            var start = 0
+            var end = min(bufferSize,text.count)
+            repeat{
+                let startIndex=text.index(text.startIndex, offsetBy: start)
+                let endIndex=text.index(startIndex, offsetBy: end - start)
+                
+                DispatchQueue.main.async {
+                    self.textView.text.append(String(text[startIndex..<endIndex]))
+//                    self.textView.setNeedsDisplay()
+//                    self.refreshColors()
+                }
+                start = end
+                end = start + min(bufferSize,text.count - start)
+                Thread.sleep(forTimeInterval: 0.1)
+            } while end < text.count
+            
         }
     }
 
