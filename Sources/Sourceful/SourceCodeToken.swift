@@ -8,7 +8,7 @@
 
 import Foundation
 
-public enum SourceCodeTokenType {
+public enum SourceCodeTokenType:Decodable{
 	case plain
 	case number
 	case string

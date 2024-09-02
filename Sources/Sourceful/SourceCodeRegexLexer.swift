@@ -40,3 +40,100 @@ extension SourceCodeRegexLexer {
 	}
 	
 }
+
+enum KeywordType:Decodable{
+    case regex
+    case words
+}
+
+enum RegexOptions:Decodable{
+    case caseInsensitive
+    case allowCommentsAndWhitespace
+    case ignoreMetacharacters
+    case dotMatchesLineSeparators
+    case anchorsMatchLines
+    case useUnixLineSeparators
+    case useUnicodeWordBoundaries
+    func toNSRegexOption()->NSRegularExpression.Options{
+        switch self {
+        case .caseInsensitive:
+            return .caseInsensitive
+        case .allowCommentsAndWhitespace:
+            return .allowCommentsAndWhitespace
+        case .ignoreMetacharacters:
+            return .ignoreMetacharacters
+        case .dotMatchesLineSeparators:
+            return .dotMatchesLineSeparators
+        case .anchorsMatchLines:
+            return .anchorsMatchLines
+        case .useUnixLineSeparators:
+            return .useUnixLineSeparators
+        case .useUnicodeWordBoundaries:
+            return .useUnicodeWordBoundaries
+        }
+    }
+}
+
+extension Array where Element == RegexOptions {
+    func toNSRegexOptions() -> NSRegularExpression.Options {
+        return self.reduce([]) { (result, option) -> NSRegularExpression.Options in
+            return result.union(option.toNSRegexOption())
+        }
+    }
+}
+
+
+struct LanguageLexer:Decodable{
+    let type:KeywordType
+    let content:String
+    let options: [RegexOptions]? = []
+    let tokenType:SourceCodeTokenType
+}
+
+public class CustomLexer: SourceCodeRegexLexer,Decodable {
+    private var generators:[TokenGenerator]=[]
+    
+    public func generators(source: String) -> [TokenGenerator] {
+        return generators
+    }
+    
+    
+    
+    required public init(from decoder: any Decoder) throws {
+        
+        var container = try decoder.unkeyedContainer()
+        
+        while !container.isAtEnd {
+            let lexer = try container.decode(LanguageLexer.self)
+            let generator: TokenGenerator?
+            
+            switch lexer.type {
+            case .regex:
+                if let options = lexer.options,!options.isEmpty{
+                    generator = regexGenerator(lexer.content, options: options.toNSRegexOptions(), tokenType: lexer.tokenType)
+                }
+                else{
+                    generator = regexGenerator(lexer.content, tokenType: lexer.tokenType)
+                }
+            case .words:
+                generator = keywordGenerator(lexer.content.split(separator: " ").map(String.init), tokenType: lexer.tokenType)
+            }
+            
+            if let generator = generator {
+                generators.append(generator)
+            }
+        }
+    }
+}
+extension SourceCodeRegexLexer{    
+    public static func loadWithFile(_ path:String) throws -> SourceCodeRegexLexer{
+        if let path = Bundle.main.path(forResource: path, ofType: "json"){
+            let fileURL = URL(fileURLWithPath: path)
+            let data = try Data(contentsOf: fileURL)
+            let decoder = JSONDecoder()
+            let lexer = try decoder.decode(CustomLexer.self, from: data)
+            return lexer
+        }
+        return EmptyLexer()
+    }
+}
