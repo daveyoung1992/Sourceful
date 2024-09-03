@@ -41,12 +41,12 @@ extension SourceCodeRegexLexer {
 	
 }
 
-enum KeywordType:Decodable{
+enum KeywordType:String,Decodable{
     case regex
     case words
 }
 
-enum RegexOptions:Decodable{
+enum RegexOptions:String,Decodable{
     case caseInsensitive
     case allowCommentsAndWhitespace
     case ignoreMetacharacters
@@ -86,7 +86,7 @@ extension Array where Element == RegexOptions {
 struct LanguageLexer:Decodable{
     let type:KeywordType
     let content:String
-    let options: [RegexOptions]? = []
+    let options: [RegexOptions]?
     let tokenType:SourceCodeTokenType
 }
 
@@ -124,8 +124,6 @@ public class CustomLexer: SourceCodeRegexLexer,Decodable {
             }
         }
     }
-}
-extension SourceCodeRegexLexer{    
     public static func loadWithFile(_ path:String) throws -> SourceCodeRegexLexer{
         if let path = Bundle.main.path(forResource: path, ofType: "json"){
             let fileURL = URL(fileURLWithPath: path)

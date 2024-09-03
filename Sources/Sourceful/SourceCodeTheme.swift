@@ -34,19 +34,14 @@ extension SourceCodeTheme {
 		
 		return attributes
 	}
-    public static func loadWithThemeFile(_ path:String) throws -> SourceCodeTheme{
-        if let path = Bundle.main.path(forResource: path, ofType: "json"){
-            let fileURL = URL(fileURLWithPath: path)
-            let data = try Data(contentsOf: fileURL)
-            let decoder = JSONDecoder()
-            let themeData = try decoder.decode(CustomSourceCodeTheme.self, from: data)
-            return themeData
-        }
-        return DefaultSourceCodeTheme()
-    }
 }
 
 public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
+    public static func == (lhs: CustomSourceCodeTheme, rhs: CustomSourceCodeTheme) -> Bool {
+        return lhs.id == rhs.id
+    }
+    var id:String = ""
+    
     public func color(for syntaxColorType: SourceCodeTokenType) -> Color {
         switch syntaxColorType {
         case .plain:
@@ -63,6 +58,10 @@ public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
             return tokenColors?["comment"]?.color ?? foregroundColor
         case .editorPlaceholder:
             return tokenColors?["placeholder"]?.color ?? foregroundColor.withAlphaComponent(0.5)
+        case .function:
+            return tokenColors?["function"]?.color ?? foregroundColor
+        case .type:
+            return tokenColors?["type"]?.color ?? foregroundColor
         }
     }
     
@@ -76,7 +75,7 @@ public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
     
     private var tokenColors:[String:CodableColor]?
     
-    private var foregroundColor: Color
+    public var foregroundColor: Color
     
     enum CodingKeys: String, CodingKey {
         case lineNumberStyle
@@ -102,6 +101,17 @@ public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
         self.foregroundColor = fontStyle.color.color
         
         self.backgroundColor = background.color
+    }
+    public static func loadWithThemeFile(_ path:String) throws -> CustomSourceCodeTheme?{
+        if let path = Bundle.main.path(forResource: path, ofType: "json"){
+            let fileURL = URL(fileURLWithPath: path)
+            let data = try Data(contentsOf: fileURL)
+            let decoder = JSONDecoder()
+            var themeData = try decoder.decode(CustomSourceCodeTheme.self, from: data)
+            themeData.id = fileURL.lastPathComponent
+            return themeData
+        }
+        return nil
     }
 }
 

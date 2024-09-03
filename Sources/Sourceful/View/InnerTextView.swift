@@ -35,7 +35,7 @@ class InnerTextView: TextView {
     
     var lineRanges:[LineRange] = []
 	
-	var theme: SyntaxColorTheme?
+    var theme: (any SyntaxColorTheme)?
 	
 	var cachedParagraphs: [Paragraph]?
 	

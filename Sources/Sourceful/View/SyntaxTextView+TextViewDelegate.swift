@@ -42,8 +42,9 @@ extension SyntaxTextView {
 		#if os(macOS)		
 		self.textView.scrollRangeToVisible(range)
 		#endif
-		
-        self.delegate?.didChangeSelectedRange(self, selectedRange: range, textPosition: self.getTextPostion(for: range))
+        Task{
+            self.delegate?.didChangeSelectedRange(self, selectedRange: range, textPosition: self.getTextPostion(for: range))
+        }
 	}
 	
 	func selectionDidChange() {
@@ -63,14 +64,39 @@ extension SyntaxTextView {
 			#endif
 			
 		}
-		
-		colorTextView(lexerForSource: { (source) -> Lexer in
-			return delegate.lexerForSource(source)
-		})
+        updateColor()
+//		colorTextView(lexerForSource: { (source) -> Lexer in
+//			return delegate.lexerForSource(source)
+//		})
 		
 		previousSelectedRange = textView.selectedRange
 		
 	}
+    
+    func updateColor(allowDelay:Bool = true){
+        updateColorTimer?.invalidate()
+        if allowDelay{
+            updateColorTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+                if let delegate = self.delegate{
+                    self.colorTextView(lexerForSource: { (source) -> Lexer in
+                        return delegate.lexerForSource(source)
+                    })
+                }
+            })
+        }
+        else{
+            if let delegate = self.delegate{
+                self.colorTextView(lexerForSource: { (source) -> Lexer in
+                    return delegate.lexerForSource(source)
+                })
+            }
+        }
+//        if updateColorWorker == nil{
+//            updateColorWorker = DispatchWorkItem(block: {
+//            })
+//        }
+//        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now()+0.1, execute: updateColorWorker!)
+    }
 	
 	func updateEditorPlaceholders(cachedTokens: [CachedToken]) {
 		
@@ -170,9 +196,10 @@ extension SyntaxTextView {
             self.textView.invalidateCachedParagraphs()
             
             if let delegate = delegate {
-                colorTextView(lexerForSource: { (source) -> Lexer in
-                    return delegate.lexerForSource(source)
-                })
+                updateColor()
+//                colorTextView(lexerForSource: { (source) -> Lexer in
+//                    return delegate.lexerForSource(source)
+//                })
             }
             
             wrapperView.setNeedsDisplay(wrapperView.bounds)
@@ -205,22 +232,29 @@ extension SyntaxTextView {
 		open func textViewDidChange(_ textView: UITextView) {
 			
 			didUpdateText()
-            delegate?.didChangeSelectedRange(self, selectedRange: textView.selectedRange, textPosition: self.getTextPostion(for: textView.selectedRange))
-            print("textrange:\(textView.selectedRange)")
+            Task{
+                delegate?.didChangeSelectedRange(self, selectedRange: textView.selectedRange, textPosition: self.getTextPostion(for: textView.selectedRange))
+            }
             contentDidChangeSelection()
 		}
 		
 		func refreshColors() {
+            refreshTimer?.invalidate()
+            refreshTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+                DispatchQueue.main.async {
+                    self.invalidateCachedTokens()
+                    self.textView.invalidateCachedParagraphs()
+                    self.textView.setNeedsDisplay()
+                    self.updateColor(allowDelay: false)
+                }
+            })
 			
-			self.invalidateCachedTokens()
-			self.textView.invalidateCachedParagraphs()
-			textView.setNeedsDisplay()
-			
-			if let delegate = delegate {
-				colorTextView(lexerForSource: { (source) -> Lexer in
-					return delegate.lexerForSource(source)
-				})
-			}
+//			if let delegate = delegate {
+//                updateColor()
+////				colorTextView(lexerForSource: { (source) -> Lexer in
+////					return delegate.lexerForSource(source)
+////				})
+//			}
 			
 		}
 	

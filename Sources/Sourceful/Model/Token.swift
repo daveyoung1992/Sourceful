@@ -22,6 +22,8 @@ public protocol Token {
 	
 	/// The range of the token in the source string.
 	var range: Range<String.Index> { get }
+    
+    var isType:Bool{get}
 	
 }
 

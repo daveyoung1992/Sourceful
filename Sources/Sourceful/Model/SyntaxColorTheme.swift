@@ -36,7 +36,7 @@ public struct GutterStyle {
 	}
 }
 
-public protocol SyntaxColorTheme {
+public protocol SyntaxColorTheme:Equatable {
 	
 	/// Nil hides line numbers.
 	var lineNumbersStyle: LineNumbersStyle? { get }

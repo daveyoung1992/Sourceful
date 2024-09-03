@@ -46,7 +46,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
             insertionPointColor: @escaping () -> Sourceful.Color={ Sourceful.Color.white },
             lexerForSource: @escaping (String) -> Lexer={ _ in EmptyLexer() },
             textViewDidBeginEditing: @escaping (SourceCodeTextEditor) -> Void={ _ in },
-            theme: @escaping () -> SourceCodeTheme={ DefaultSourceCodeTheme() }
+            theme: @escaping () -> any SourceCodeTheme={ DefaultSourceCodeTheme() }
         ) {
             self.didChangeText = didChangeText
             self.didChangeSelectedRange = didChangeSelectedRange
@@ -59,7 +59,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
     @Binding var text: String
     @Binding private var textPosition: TextPosition
     @Binding private var selectedRange:NSRange
-    @Binding private var theme:SourceCodeTheme
+    @Binding private var theme:CustomSourceCodeTheme?
     private var shouldBecomeFirstResponder: Bool
     private var custom: Customization
     private var textView: SyntaxTextView
@@ -68,7 +68,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         text: Binding<String>,
         textPosition: Binding<TextPosition>,
         selectedRange: Binding<NSRange>,
-        theme:Binding<SourceCodeTheme>,
+        theme:Binding<CustomSourceCodeTheme?>,
         customization: Customization = Customization(
             didChangeText: {_ in },
             didChangeSelectedRange: {_,_,_ in},

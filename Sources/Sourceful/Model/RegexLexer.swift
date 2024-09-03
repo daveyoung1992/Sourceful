@@ -53,20 +53,40 @@ extension RegexLexer {
 		let generators = self.generators(source: input)
 		
 		var tokens = [Token]()
+        var keywordGenerators:[KeywordTokenGenerator]=[]
+        var regexGenerators:[RegexTokenGenerator]=[]
+        var stringGenerators:[RegexTokenGenerator]=[]
+        var commentGenerators:[RegexTokenGenerator]=[]
 		
 		for generator in generators {
 			
 			switch generator {
 			case .regex(let regexGenerator):
-				tokens.append(contentsOf: generateRegexTokens(regexGenerator, source: input))
+                regexGenerators.append(regexGenerator)
+//				tokens.append(contentsOf: generateRegexTokens(regexGenerator, source: input))
 
 			case .keywords(let keywordGenerator):
-				tokens.append(contentsOf: generateKeywordTokens(keywordGenerator, source: input))
+                keywordGenerators.append(keywordGenerator)
+//				tokens.append(contentsOf: generateKeywordTokens(keywordGenerator, source: input))
 				
 			}
 		
 		}
-	
+        
+//        var keywords:[String] = []
+//        // 添加已知的 Type 为keywordToken
+//        for token in tokens.filter({$0.isType}){
+//            keywords.append(String(input[token.range]).trimmingCharacters(in: .whitespacesAndNewlines))
+//        }
+//        keywords = Set(keywords).sorted()
+//        
+//        let typeGenerator = KeywordTokenGenerator(keywords: keywords, tokenTransformer: { (range) -> Token in
+//            return SimpleSourceCodeToken(type: .type, range: range)
+//        })
+//        keywordGenerators.append(typeGenerator)
+        tokens.append(contentsOf: generateKeywordTokens(keywordGenerators, source: input))
+        tokens.append(contentsOf: generateRegexTokens(regexGenerators, source: input))
+        
 		return tokens
 	}
 
@@ -91,6 +111,24 @@ extension RegexLexer {
 
 		return tokens
 	}
+    
+    func generateKeywordTokens(_ generators: [KeywordTokenGenerator], source: String) -> [Token] {
+
+        var tokens = [Token]()
+
+        source.enumerateSubstrings(in: source.startIndex..<source.endIndex, options: [.byWords]) { (word, range, _, _) in
+            if let word{
+                for generator in generators {
+                    if generator.keywords.contains(word){
+                        let token = generator.tokenTransformer(range)
+                        tokens.append(token)
+                    }
+                }
+            }
+        }
+
+        return tokens
+    }
 	
 	public func generateRegexTokens(_ generator: RegexTokenGenerator, source: String) -> [Token] {
 
@@ -110,5 +148,26 @@ extension RegexLexer {
 		
 		return tokens
 	}
+    
+    public func generateRegexTokens(_ generators: [RegexTokenGenerator], source: String) -> [Token] {
+
+        var tokens = [Token]()
+
+        let fullNSRange = NSRange(location: 0, length: source.utf16.count)
+        for generator in generators {
+            for numberMatch in generator.regularExpression.matches(in: source, options: [], range: fullNSRange) {
+                
+                guard let swiftRange = Range(numberMatch.range, in: source) else {
+                    continue
+                }
+                
+                let token = generator.tokenTransformer(swiftRange)
+                tokens.append(token)
+                
+            }
+        }
+        
+        return tokens
+    }
 
 }

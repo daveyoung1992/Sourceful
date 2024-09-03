@@ -9,6 +9,10 @@
 import Foundation
 
 public struct DefaultSourceCodeTheme: SourceCodeTheme {
+    public static func == (lhs: DefaultSourceCodeTheme, rhs: DefaultSourceCodeTheme) -> Bool {
+        return true
+    }
+    
 	
 	public init() {
 		
@@ -49,7 +53,11 @@ public struct DefaultSourceCodeTheme: SourceCodeTheme {
 			
 		case .editorPlaceholder:
 			return backgroundColor
-		}
+        case .function:
+            return Color.red
+        case .type:
+            return Color.blue
+        }
 		
 	}
 	

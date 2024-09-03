@@ -38,7 +38,7 @@ public extension SyntaxTextViewDelegate {
 
 struct ThemeInfo {
 
-    let theme: SyntaxColorTheme
+    let theme: any SyntaxColorTheme
 
     /// Width of a space character in the theme's font.
     /// Useful for calculating tab indent size.
@@ -66,6 +66,9 @@ open class SyntaxTextView: _View {
     }
 
     var ignoreSelectionChange = false
+    
+    var updateColorTimer:Timer?
+    var refreshTimer:Timer?
 
     #if os(macOS)
 
@@ -428,21 +431,45 @@ open class SyntaxTextView: _View {
     }
 
     #endif
+    
+    var oldTheme:CustomSourceCodeTheme?
 
-    public var theme: SyntaxColorTheme? {
+    public var theme: CustomSourceCodeTheme? {
         didSet {
             guard let theme = theme else {
                 return
             }
-
+            if let oldTheme,oldTheme == theme{
+                return
+            }
+            oldTheme = theme
             cachedThemeInfo = nil
             #if os(iOS)
             backgroundColor = theme.backgroundColor
             #endif
             textView.backgroundColor = theme.backgroundColor
+            
+            // 设置默认样式
+            let textStorage: NSTextStorage
+            
+            #if os(macOS)
+            textStorage = textView.textStorage!
+            #else
+            textStorage = textView.textStorage
+            #endif
+            var attributes = [NSAttributedString.Key: Any]()
+
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.paragraphSpacing = 2.0
+            paragraphStyle.tabStops = []
+
+            attributes[.paragraphStyle] = paragraphStyle
+            let wholeRange = NSRange(location: 0, length: (textView.text as NSString).length)
+            textStorage.setAttributes(attributes, range: wholeRange)
+            textView.typingAttributes = attributes
             textView.theme = theme
             textView.font = theme.font
-
+            textView.textColor = theme.foregroundColor
             refreshColors()
         }
     }
@@ -474,47 +501,45 @@ open class SyntaxTextView: _View {
         cachedTokens = nil
     }
 
+    @MainActor
     func colorTextView(lexerForSource: (String) -> Lexer) {
         guard let source = textView.text else {
             return
         }
-
+        if theme == nil{return}
+        
         let textStorage: NSTextStorage
-
-        #if os(macOS)
+        
+#if os(macOS)
         textStorage = textView.textStorage!
-        #else
+#else
         textStorage = textView.textStorage
-        #endif
-
+#endif
+        
         //		self.backgroundColor = theme.backgroundColor
-
+        
         let tokens: [Token]
-
+        
         if let cachedTokens = cachedTokens {
             updateAttributes(textStorage: textStorage, cachedTokens: cachedTokens, source: source)
         } else {
             guard let theme = self.theme else {
                 return
             }
-
+            
             guard let themeInfo = self.themeInfo else {
                 return
             }
-
-            textView.font = theme.font
-
+            
             let lexer = lexerForSource(source)
             tokens = lexer.getSavannaTokens(input: source)
-
+            
             let cachedTokens: [CachedToken] = tokens.map {
-
                 let nsRange = source.nsRange(fromRange: $0.range)
                 return CachedToken(token: $0, nsRange: nsRange)
             }
-
+            
             self.cachedTokens = cachedTokens
-
             createAttributes(theme: theme, themeInfo: themeInfo, textStorage: textStorage, cachedTokens: cachedTokens, source: source)
         }
     }
@@ -566,7 +591,7 @@ open class SyntaxTextView: _View {
         }
     }
 
-    func createAttributes(theme: SyntaxColorTheme, themeInfo: ThemeInfo, textStorage: NSTextStorage, cachedTokens: [CachedToken], source: String) {
+    func createAttributes(theme: any SyntaxColorTheme, themeInfo: ThemeInfo, textStorage: NSTextStorage, cachedTokens: [CachedToken], source: String) {
 
         textStorage.beginEditing()
 

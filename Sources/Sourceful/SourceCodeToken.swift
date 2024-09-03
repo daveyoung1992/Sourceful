@@ -8,7 +8,7 @@
 
 import Foundation
 
-public enum SourceCodeTokenType:Decodable{
+public enum SourceCodeTokenType:String,Decodable{
 	case plain
 	case number
 	case string
@@ -16,6 +16,8 @@ public enum SourceCodeTokenType:Decodable{
 	case keyword
 	case comment
 	case editorPlaceholder
+    case function
+    case type
 }
 
 protocol SourceCodeToken: Token {
@@ -33,6 +35,10 @@ extension SourceCodeToken {
 	var isPlain: Bool {
 		return type == .plain
 	}
+    
+    var isType: Bool{
+        return type == .type
+    }
 	
 }
 
