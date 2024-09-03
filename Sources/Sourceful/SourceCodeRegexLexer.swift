@@ -12,22 +12,22 @@ public protocol SourceCodeRegexLexer: RegexLexer {
 }
 
 extension RegexLexer {
-	public func regexGenerator(_ pattern: String, options: NSRegularExpression.Options = [], transformer: @escaping TokenTransformer) -> TokenGenerator? {
+    public func regexGenerator(_ pattern: String, options: NSRegularExpression.Options = [], matchGroup:Int=0, transformer: @escaping TokenTransformer) -> TokenGenerator? {
 		
 		guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else {
 			return nil
 		}
 		
-		return .regex(RegexTokenGenerator(regularExpression: regex, tokenTransformer: transformer))
+		return .regex(RegexTokenGenerator(regularExpression: regex,matchGroup: matchGroup, tokenTransformer: transformer))
 	}
 
 }
 
 extension SourceCodeRegexLexer {
 	
-	public func regexGenerator(_ pattern: String, options: NSRegularExpression.Options = [], tokenType: SourceCodeTokenType) -> TokenGenerator? {
+	public func regexGenerator(_ pattern: String, options: NSRegularExpression.Options = [], matchGroup:Int=0, tokenType: SourceCodeTokenType) -> TokenGenerator? {
 		
-		return regexGenerator(pattern, options: options, transformer: { (range) -> Token in
+		return regexGenerator(pattern, options: options,matchGroup: matchGroup, transformer: { (range) -> Token in
 			return SimpleSourceCodeToken(type: tokenType, range: range)
 		})
 	}
@@ -87,6 +87,7 @@ struct LanguageLexer:Decodable{
     let type:KeywordType
     let content:String
     let options: [RegexOptions]?
+    let matchGroup:Int?
     let tokenType:SourceCodeTokenType
 }
 
@@ -110,10 +111,10 @@ public class CustomLexer: SourceCodeRegexLexer,Decodable {
             switch lexer.type {
             case .regex:
                 if let options = lexer.options,!options.isEmpty{
-                    generator = regexGenerator(lexer.content, options: options.toNSRegexOptions(), tokenType: lexer.tokenType)
+                    generator = regexGenerator(lexer.content, options: options.toNSRegexOptions(),matchGroup: lexer.matchGroup ?? 0, tokenType: lexer.tokenType)
                 }
                 else{
-                    generator = regexGenerator(lexer.content, tokenType: lexer.tokenType)
+                    generator = regexGenerator(lexer.content,matchGroup: lexer.matchGroup ?? 0, tokenType: lexer.tokenType)
                 }
             case .words:
                 generator = keywordGenerator(lexer.content.split(separator: " ").map(String.init), tokenType: lexer.tokenType)

@@ -24,6 +24,7 @@ public protocol Token {
 	var range: Range<String.Index> { get }
     
     var isType:Bool{get}
+    var isComment:Bool{get}
 	
 }
 

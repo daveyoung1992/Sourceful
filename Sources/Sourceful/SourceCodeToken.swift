@@ -39,6 +39,10 @@ extension SourceCodeToken {
     var isType: Bool{
         return type == .type
     }
+    
+    var isComment: Bool{
+        return type == .comment
+    }
 	
 }
 
