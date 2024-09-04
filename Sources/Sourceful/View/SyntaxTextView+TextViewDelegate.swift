@@ -80,17 +80,13 @@ extension SyntaxTextView {
                     return
                 }
                 if let delegate = self.delegate{
-                    self.colorTextView(updateID: updateID, lexerForSource: { (source) -> Lexer in
-                        return delegate.lexerForSource(source)
-                    })
+                    self.colorTextView(updateID: updateID)
                 }
             })
         }
         else{
             if let delegate = self.delegate{
-                self.colorTextView(updateID: updateID, lexerForSource: { (source) -> Lexer in
-                    return delegate.lexerForSource(source)
-                })
+                self.colorTextView(updateID: updateID)
             }
         }
     }
@@ -189,17 +185,17 @@ extension SyntaxTextView {
 		}
         
         func refreshColors() {
-            self.invalidateCachedTokens()
-            self.textView.invalidateCachedParagraphs()
-            
-            if let delegate = delegate {
-                updateColor()
-//                colorTextView(lexerForSource: { (source) -> Lexer in
-//                    return delegate.lexerForSource(source)
-//                })
+            if let delegate{
+                refreshTimer?.invalidate()
+                refreshTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+                    self.invalidateCachedTokens()
+                    DispatchQueue.main.async {
+                        self.textView.invalidateCachedParagraphs()
+                        self.updateColor(allowDelay: false)
+                        wrapperView.setNeedsDisplay(wrapperView.bounds)
+                    }
+                })
             }
-            
-            wrapperView.setNeedsDisplay(wrapperView.bounds)
         }
 		
 		open func textViewDidChangeSelection(_ notification: Notification) {

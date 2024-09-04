@@ -70,6 +70,12 @@ open class SyntaxTextView: _View {
     var updateColorTimer:Timer?
     var refreshTimer:Timer?
     var updateID:UUID = UUID()
+    
+    var lexer:Lexer?{
+        didSet{
+            refreshColors()
+        }
+    }
 
     #if os(macOS)
 
@@ -502,12 +508,22 @@ open class SyntaxTextView: _View {
         cachedTokens = nil
     }
     
-    func cacheToken(lexerForSource: (String) -> Lexer, callback:@escaping (String,[CachedToken])->Void){
+    func getLexer(_ source:String) -> Lexer{
+        if let lexer{
+            return lexer
+        }
+        if let delegate{
+            return delegate.lexerForSource(source)
+        }
+        return EmptyLexer()
+    }
+    
+    func cacheToken(callback:@escaping (String,[CachedToken])->Void){
         guard let source = textView.text else {
             return
         }
         if theme == nil{return}
-        let lexer = lexerForSource(source)
+        let lexer = getLexer(source)
         Task{
             DispatchQueue.global().async {
                 let tokens = lexer.getSavannaTokens(input: source)
@@ -522,7 +538,7 @@ open class SyntaxTextView: _View {
     }
 
     @MainActor
-    func colorTextView(updateID:UUID, lexerForSource: (String) -> Lexer) {
+    func colorTextView(updateID:UUID) {
         guard let source = textView.text else {
             return
         }
@@ -550,7 +566,7 @@ open class SyntaxTextView: _View {
             guard let themeInfo = self.themeInfo else {
                 return
             }
-            cacheToken(lexerForSource: lexerForSource) {source,cachedTokens in
+            cacheToken() {source,cachedTokens in
                 DispatchQueue.main.async {
                     guard updateID == self.updateID else{
                         print("已更改")
@@ -607,73 +623,6 @@ open class SyntaxTextView: _View {
         if didBeginEditing {
             textStorage.endEditing()
         }
-    }
-
-    func createAttributes1(theme: any SyntaxColorTheme, themeInfo: ThemeInfo, textStorage: NSTextStorage, cachedTokens: [CachedToken], source: String) {
-
-        textStorage.beginEditing()
-
-        var attributes = [NSAttributedString.Key: Any]()
-
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacing = 2.0
-        paragraphStyle.defaultTabInterval = themeInfo.spaceWidth * 4
-        paragraphStyle.tabStops = []
-
-        let wholeRange = NSRange(location: 0, length: (source as NSString).length)
-
-        attributes[.paragraphStyle] = paragraphStyle
-
-        for (attr, value) in theme.globalAttributes() {
-
-            attributes[attr] = value
-
-        }
-
-        textStorage.setAttributes(attributes, range: wholeRange)
-
-        let selectedRange = textView.selectedRange
-
-        for cachedToken in cachedTokens {
-
-            let token = cachedToken.token
-
-            if token.isPlain {
-                continue
-            }
-
-            let range = cachedToken.nsRange
-
-            if token.isEditorPlaceholder {
-
-                let startRange = NSRange(location: range.lowerBound, length: 2)
-                let endRange = NSRange(location: range.upperBound - 2, length: 2)
-
-                let contentRange = NSRange(location: range.lowerBound + 2, length: range.length - 4)
-
-                var attr = [NSAttributedString.Key: Any]()
-
-                var state: EditorPlaceholderState = .inactive
-
-                if isEditorPlaceholderSelected(selectedRange: selectedRange, tokenRange: range) {
-                    state = .active
-                }
-
-                attr[.editorPlaceholder] = state
-
-                textStorage.addAttributes(theme.attributes(for: token), range: contentRange)
-
-                textStorage.addAttributes([.foregroundColor: Color.clear, .font: Font.systemFont(ofSize: 0.01)], range: startRange)
-                textStorage.addAttributes([.foregroundColor: Color.clear, .font: Font.systemFont(ofSize: 0.01)], range: endRange)
-
-                textStorage.addAttributes(attr, range: range)
-                continue
-            }
-
-            textStorage.addAttributes(theme.attributes(for: token), range: range)
-        }
-
-        textStorage.endEditing()
     }
     
     func createAttributes(updateID:UUID, theme: any SyntaxColorTheme, themeInfo: ThemeInfo, textStorage: NSTextStorage, cachedTokens: [CachedToken], source: String) {

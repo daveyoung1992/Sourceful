@@ -59,6 +59,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
     @Binding var text: String
     @Binding private var textPosition: TextPosition
     @Binding private var selectedRange:NSRange
+    @Binding private var lexer:Lexer
     @Binding private var theme:CustomSourceCodeTheme?
     private var shouldBecomeFirstResponder: Bool
     private var custom: Customization
@@ -68,6 +69,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         text: Binding<String>,
         textPosition: Binding<TextPosition>,
         selectedRange: Binding<NSRange>,
+        lexer: Binding<Lexer>,
         theme:Binding<CustomSourceCodeTheme?>,
         customization: Customization = Customization(
             didChangeText: {_ in },
@@ -82,6 +84,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         self._textPosition = textPosition
         self._selectedRange = selectedRange
         self._theme = theme
+        self._lexer = lexer
         self.custom = customization
         self.shouldBecomeFirstResponder = shouldBecomeFirstResponder
         self.textView = SyntaxTextView()
@@ -121,6 +124,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         let wrappedView = textView
         wrappedView.delegate = context.coordinator
         wrappedView.theme = theme
+        wrappedView.lexer = lexer
 //        wrappedView.contentTextView.insertionPointColor = custom.insertionPointColor()
         
         context.coordinator.wrappedView = wrappedView
@@ -137,6 +141,7 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         view.theme = theme
         view.previousSelectedRange = selectedRange
         view.text = text
+        view.lexer = lexer
     }
     #endif
     
@@ -144,7 +149,8 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
     public func makeNSView(context: Context) -> SyntaxTextView {
         let wrappedView = SyntaxTextView()
         wrappedView.delegate = context.coordinator
-        wrappedView.theme = custom.theme()
+        wrappedView.theme = theme
+        wrappedView.lexer = lexer
         wrappedView.contentTextView.insertionPointColor = custom.insertionPointColor()
         
         context.coordinator.wrappedView = wrappedView
@@ -159,6 +165,8 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         view.text = text
         view.previousSelectedRange = selectedRange
         view.selectedRange = selectedRange
+        view.lexer = lexer
+        view.theme = theme
     }
     #endif
     
