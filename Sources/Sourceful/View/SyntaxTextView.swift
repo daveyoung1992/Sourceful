@@ -69,6 +69,7 @@ open class SyntaxTextView: _View {
     
     var updateColorTimer:Timer?
     var refreshTimer:Timer?
+    var updateID:UUID = UUID()
 
     #if os(macOS)
 
@@ -500,9 +501,28 @@ open class SyntaxTextView: _View {
     func invalidateCachedTokens() {
         cachedTokens = nil
     }
+    
+    func cacheToken(lexerForSource: (String) -> Lexer, callback:@escaping (String,[CachedToken])->Void){
+        guard let source = textView.text else {
+            return
+        }
+        if theme == nil{return}
+        let lexer = lexerForSource(source)
+        Task{
+            DispatchQueue.global().async {
+                let tokens = lexer.getSavannaTokens(input: source)
+                let cachedTokens: [CachedToken] = tokens.map {
+                    let nsRange = source.nsRange(fromRange: $0.range)
+                    return CachedToken(token: $0, nsRange: nsRange)
+                }
+                self.cachedTokens = cachedTokens
+                callback(source,cachedTokens)
+            }
+        }
+    }
 
     @MainActor
-    func colorTextView(lexerForSource: (String) -> Lexer) {
+    func colorTextView(updateID:UUID, lexerForSource: (String) -> Lexer) {
         guard let source = textView.text else {
             return
         }
@@ -530,17 +550,15 @@ open class SyntaxTextView: _View {
             guard let themeInfo = self.themeInfo else {
                 return
             }
-            
-            let lexer = lexerForSource(source)
-            tokens = lexer.getSavannaTokens(input: source)
-            
-            let cachedTokens: [CachedToken] = tokens.map {
-                let nsRange = source.nsRange(fromRange: $0.range)
-                return CachedToken(token: $0, nsRange: nsRange)
+            cacheToken(lexerForSource: lexerForSource) {source,cachedTokens in
+                DispatchQueue.main.async {
+                    guard updateID == self.updateID else{
+                        print("已更改")
+                        return
+                    }
+                    self.createAttributes(updateID: updateID, theme: theme, themeInfo: themeInfo, textStorage: textStorage, cachedTokens: cachedTokens, source: source)
+                }
             }
-            
-            self.cachedTokens = cachedTokens
-            createAttributes(theme: theme, themeInfo: themeInfo, textStorage: textStorage, cachedTokens: cachedTokens, source: source)
         }
     }
 
@@ -591,7 +609,7 @@ open class SyntaxTextView: _View {
         }
     }
 
-    func createAttributes(theme: any SyntaxColorTheme, themeInfo: ThemeInfo, textStorage: NSTextStorage, cachedTokens: [CachedToken], source: String) {
+    func createAttributes1(theme: any SyntaxColorTheme, themeInfo: ThemeInfo, textStorage: NSTextStorage, cachedTokens: [CachedToken], source: String) {
 
         textStorage.beginEditing()
 
@@ -657,5 +675,79 @@ open class SyntaxTextView: _View {
 
         textStorage.endEditing()
     }
+    
+    func createAttributes(updateID:UUID, theme: any SyntaxColorTheme, themeInfo: ThemeInfo, textStorage: NSTextStorage, cachedTokens: [CachedToken], source: String) {
+        let wholeRange = NSRange(location: 0, length: (source as NSString).length)
+        let selectedRange = textView.selectedRange
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard updateID == self.updateID else{
+                print("已更改")
+                return
+            }
+            var attributes = [NSAttributedString.Key: Any]()
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.paragraphSpacing = 2.0
+            paragraphStyle.defaultTabInterval = themeInfo.spaceWidth * 4
+            paragraphStyle.tabStops = []
+
+            attributes[.paragraphStyle] = paragraphStyle
+
+            for (attr, value) in theme.globalAttributes() {
+                attributes[attr] = value
+            }
+            var attributesToAdd = [(attributes: [NSAttributedString.Key: Any], range: NSRange)]()
+
+            for cachedToken in cachedTokens {
+                guard updateID == self.updateID else{
+                    print("已更改")
+                    return
+                }
+                let token = cachedToken.token
+
+                if token.isPlain {
+                    continue
+                }
+
+                let range = cachedToken.nsRange
+
+                if token.isEditorPlaceholder {
+                    let startRange = NSRange(location: range.lowerBound, length: 2)
+                    let endRange = NSRange(location: range.upperBound - 2, length: 2)
+                    let contentRange = NSRange(location: range.lowerBound + 2, length: range.length - 4)
+
+                    var attr = [NSAttributedString.Key: Any]()
+                    var state: EditorPlaceholderState = .inactive
+
+                    if self.isEditorPlaceholderSelected(selectedRange: selectedRange, tokenRange: range) {
+                        state = .active
+                    }
+
+                    attr[.editorPlaceholder] = state
+
+                    attributesToAdd.append((theme.attributes(for: token), contentRange))
+                    attributesToAdd.append(([.foregroundColor: Color.clear, .font: Font.systemFont(ofSize: 0.01)], startRange))
+                    attributesToAdd.append(([.foregroundColor: Color.clear, .font: Font.systemFont(ofSize: 0.01)], endRange))
+                    attributesToAdd.append((attr, range))
+                } else {
+                    attributesToAdd.append((theme.attributes(for: token), range))
+                }
+            }
+
+            DispatchQueue.main.async {
+                guard updateID == self.updateID else{
+                    print("已更改")
+                    return
+                }
+                textStorage.beginEditing()
+                textStorage.setAttributes(attributes, range: wholeRange)
+                for (attr, range) in attributesToAdd {
+                    textStorage.addAttributes(attr, range: range)
+                }
+                textStorage.endEditing()
+            }
+        }
+    }
+
 
 }

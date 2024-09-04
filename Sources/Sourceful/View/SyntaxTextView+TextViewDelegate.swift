@@ -36,7 +36,6 @@ extension SyntaxTextView {
 	}
 	
 	func updateSelectedRange(_ range: NSRange) {
-        print("range:\(range)")
 		textView.selectedRange = range
 		
 		#if os(macOS)		
@@ -65,20 +64,23 @@ extension SyntaxTextView {
 			
 		}
         updateColor()
-//		colorTextView(lexerForSource: { (source) -> Lexer in
-//			return delegate.lexerForSource(source)
-//		})
 		
 		previousSelectedRange = textView.selectedRange
 		
 	}
     
     func updateColor(allowDelay:Bool = true){
+        updateID = UUID()
+        let updateID = updateID
         updateColorTimer?.invalidate()
         if allowDelay{
             updateColorTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+                guard updateID == self.updateID else{
+                    print("已更改")
+                    return
+                }
                 if let delegate = self.delegate{
-                    self.colorTextView(lexerForSource: { (source) -> Lexer in
+                    self.colorTextView(updateID: updateID, lexerForSource: { (source) -> Lexer in
                         return delegate.lexerForSource(source)
                     })
                 }
@@ -86,16 +88,11 @@ extension SyntaxTextView {
         }
         else{
             if let delegate = self.delegate{
-                self.colorTextView(lexerForSource: { (source) -> Lexer in
+                self.colorTextView(updateID: updateID, lexerForSource: { (source) -> Lexer in
                     return delegate.lexerForSource(source)
                 })
             }
         }
-//        if updateColorWorker == nil{
-//            updateColorWorker = DispatchWorkItem(block: {
-//            })
-//        }
-//        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now()+0.1, execute: updateColorWorker!)
     }
 	
 	func updateEditorPlaceholders(cachedTokens: [CachedToken]) {
@@ -239,23 +236,17 @@ extension SyntaxTextView {
 		}
 		
 		func refreshColors() {
-            refreshTimer?.invalidate()
-            refreshTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
-                DispatchQueue.main.async {
+            if let delegate{
+                refreshTimer?.invalidate()
+                refreshTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
                     self.invalidateCachedTokens()
-                    self.textView.invalidateCachedParagraphs()
-                    self.textView.setNeedsDisplay()
-                    self.updateColor(allowDelay: false)
-                }
-            })
-			
-//			if let delegate = delegate {
-//                updateColor()
-////				colorTextView(lexerForSource: { (source) -> Lexer in
-////					return delegate.lexerForSource(source)
-////				})
-//			}
-			
+                    DispatchQueue.main.async {
+                        self.textView.invalidateCachedParagraphs()
+                        self.textView.setNeedsDisplay()
+                        self.updateColor(allowDelay: false)
+                    }
+                })
+            }
 		}
 	
 		open func textViewDidChangeSelection(_ textView: UITextView) {

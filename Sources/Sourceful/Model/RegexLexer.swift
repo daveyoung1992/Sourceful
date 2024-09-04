@@ -52,7 +52,6 @@ public protocol RegexLexer: Lexer {
 extension RegexLexer {
 	
 	public func getSavannaTokens(input: String) -> [Token] {
-		
 		let generators = self.generators(source: input)
 		
 		var tokens = [Token]()
@@ -66,31 +65,16 @@ extension RegexLexer {
 			switch generator {
 			case .regex(let regexGenerator):
                 regexGenerators.append(regexGenerator)
-//				tokens.append(contentsOf: generateRegexTokens(regexGenerator, source: input))
 
 			case .keywords(let keywordGenerator):
                 keywordGenerators.append(keywordGenerator)
-//				tokens.append(contentsOf: generateKeywordTokens(keywordGenerator, source: input))
 				
 			}
 		
 		}
-        
-//        var keywords:[String] = []
-//        // 添加已知的 Type 为keywordToken
-//        for token in tokens.filter({$0.isType}){
-//            keywords.append(String(input[token.range]).trimmingCharacters(in: .whitespacesAndNewlines))
-//        }
-//        keywords = Set(keywords).sorted()
-//        
-//        let typeGenerator = KeywordTokenGenerator(keywords: keywords, tokenTransformer: { (range) -> Token in
-//            return SimpleSourceCodeToken(type: .type, range: range)
-//        })
-//        keywordGenerators.append(typeGenerator)
         tokens.append(contentsOf: generateKeywordTokens(keywordGenerators, source: input))
         tokens.append(contentsOf: generateRegexTokens(regexGenerators, source: input))
-        print(tokens.count)
-        print("1.\(Date().timeIntervalSince1970)")
+        
         // 将评论token和其它token分开
         var commentTokens: [Token] = []
         var otherTokens: [Token] = []
@@ -102,23 +86,7 @@ extension RegexLexer {
                 otherTokens.append(token)
             }
         }
-        print("2.\(Date().timeIntervalSince1970)")
-
-//        // 从其它token中排除所有位于评论内的token
-//        tokens = commentTokens
-//        for token in otherTokens {
-//            var isContained = false
-//            for commentToken in commentTokens {
-//                if commentToken.range.contains(token.range.upperBound) || commentToken.range.contains(token.range.lowerBound) {
-//                    isContained = true
-//                    break
-//                }
-//            }
-//            if !isContained {
-//                tokens.append(token)
-//            }
-//        }
-//        print("3.\(Date().timeIntervalSince1970)")
+        
         // 对 commentTokens 进行排序，方便后续使用二分查找
         commentTokens.sort { $0.range.lowerBound < $1.range.lowerBound }
         tokens = commentTokens
@@ -168,7 +136,6 @@ extension RegexLexer {
                 tokens.append(token)
             }
         }
-        print("4.\(Date().timeIntervalSince1970)")
 		return tokens
 	}
 
