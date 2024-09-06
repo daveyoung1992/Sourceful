@@ -10,6 +10,7 @@
 import Foundation
 
 public class Python3Lexer: SourceCodeRegexLexer {
+    public var id: String = "<Python3>"
 	
 	public init() {
 		

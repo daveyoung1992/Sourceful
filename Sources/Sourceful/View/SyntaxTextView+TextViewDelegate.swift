@@ -63,31 +63,28 @@ extension SyntaxTextView {
 			#endif
 			
 		}
-        updateColor()
+        updateColor(allowDelay: false)
 		
 		previousSelectedRange = textView.selectedRange
 		
 	}
     
     func updateColor(allowDelay:Bool = true){
+        updateColorTimer?.invalidate()
         updateID = UUID()
         let updateID = updateID
-        updateColorTimer?.invalidate()
         if allowDelay{
-            updateColorTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+            updateColorTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: {[weak self] _ in
+                guard let self else{return}
                 guard updateID == self.updateID else{
                     print("已更改")
                     return
                 }
-                if let delegate = self.delegate{
-                    self.colorTextView(updateID: updateID)
-                }
+                self.colorTextView(updateID: updateID)
             })
         }
         else{
-            if let delegate = self.delegate{
-                self.colorTextView(updateID: updateID)
-            }
+            self.colorTextView(updateID: updateID)
         }
     }
 	
@@ -159,7 +156,12 @@ extension SyntaxTextView {
     
     func didUpdateText() {
         
-        refreshColors()
+        if self.enableSearch && !self.searchKey.isEmpty{
+            self.search()
+        }
+        else{
+            refreshColors()
+        }
         delegate?.didChangeText(self)
         
     }
@@ -231,17 +233,30 @@ extension SyntaxTextView {
             contentDidChangeSelection()
 		}
 		
-		func refreshColors() {
+        func refreshColors(allowDelay:Bool=true) {
+            refreshTimer?.invalidate()
             if let delegate{
-                refreshTimer?.invalidate()
-                refreshTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+                if allowDelay{
+                    refreshTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: {[weak self] _ in
+                        guard let self else{return}
+                        self.invalidateCachedTokens()
+                        DispatchQueue.main.async {[weak self] in
+                            guard let self else{return}
+                            self.textView.invalidateCachedParagraphs()
+                            self.textView.setNeedsDisplay()
+                            self.updateColor(allowDelay: false)
+                        }
+                    })
+                }
+                else{
                     self.invalidateCachedTokens()
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async {[weak self] in
+                        guard let self else{return}
                         self.textView.invalidateCachedParagraphs()
                         self.textView.setNeedsDisplay()
                         self.updateColor(allowDelay: false)
                     }
-                })
+                }
             }
 		}
 	

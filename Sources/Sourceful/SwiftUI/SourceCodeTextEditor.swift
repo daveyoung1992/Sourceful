@@ -61,9 +61,15 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
     @Binding private var selectedRange:NSRange
     @Binding private var lexer:Lexer
     @Binding private var theme:CustomSourceCodeTheme?
+    @Binding var enableSearch:Bool
+    var onSearching:()->Void = {}
+    var onSearchResult:(Int)->Void = {_ in }
+    var onSearchIndexChanged:(Int)->Void = {_ in }
+    
     private var shouldBecomeFirstResponder: Bool
     private var custom: Customization
     private var textView: SyntaxTextView
+    
     
     public init(
         text: Binding<String>,
@@ -71,6 +77,10 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         selectedRange: Binding<NSRange>,
         lexer: Binding<Lexer>,
         theme:Binding<CustomSourceCodeTheme?>,
+        enableSearch:Binding<Bool>,
+        onSearching:@escaping ()->Void = {},
+        onSearchResult:@escaping (Int)->Void = {_ in },
+        onSearchIndexChanged:@escaping (Int)->Void = {_ in },
         customization: Customization = Customization(
             didChangeText: {_ in },
             didChangeSelectedRange: {_,_,_ in},
@@ -85,7 +95,11 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         self._selectedRange = selectedRange
         self._theme = theme
         self._lexer = lexer
+        self._enableSearch = enableSearch
         self.custom = customization
+        self.onSearching = onSearching
+        self.onSearchResult = onSearchResult
+        self.onSearchIndexChanged = onSearchIndexChanged
         self.shouldBecomeFirstResponder = shouldBecomeFirstResponder
         self.textView = SyntaxTextView()
     }
@@ -94,8 +108,8 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         textView.goLine(line)
     }
     
-    public func goRange(_ range:NSRange){
-        textView.setSeletctTextRange(range)
+    public func goRange(_ range:NSRange,getFocus:Bool=true){
+        textView.setSeletctTextRange(range,getFocus:getFocus)
     }
     
     public func makeCoordinator() -> Coordinator {
@@ -111,6 +125,19 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         }
     }
     
+    public func jumpToSearchResult(for index:Int,getFocus:Bool=false){
+        textView.jumpToSearchResult(for: index, getFocus: getFocus)
+    }
+    
+    public func search(key: String, options: ContentSearchOptions){
+        textView.search(key: key, options: options)
+    }
+    public func replace(index:Int,replaceTo:String,callback:@escaping () -> Void){
+        textView.replace(index: index, replaceTo: replaceTo, callback: callback)
+    }
+    public func replaceAll(replaceTo:String,callback:@escaping () -> Void){
+        textView.replaceAll(replaceTo: replaceTo, callback: callback)
+    }
     #if os(iOS)
 
     public func becomeFirstResponder() -> Bool {
@@ -125,6 +152,10 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         wrappedView.delegate = context.coordinator
         wrappedView.theme = theme
         wrappedView.lexer = lexer
+        wrappedView.enableSearch = enableSearch
+        wrappedView.onSearchResult = onSearchResult
+        wrappedView.onSearching = onSearching
+        wrappedView.onSearchIndexChanged = onSearchIndexChanged
 //        wrappedView.contentTextView.insertionPointColor = custom.insertionPointColor()
         
         context.coordinator.wrappedView = wrappedView
@@ -138,10 +169,24 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         if shouldBecomeFirstResponder {
             view.becomeFirstResponder()
         }
-        view.theme = theme
-        view.previousSelectedRange = selectedRange
-        view.text = text
-        view.lexer = lexer
+        if view.theme != theme{
+            view.theme = theme
+        }
+        if view.previousSelectedRange != selectedRange{
+            view.previousSelectedRange = selectedRange
+        }
+        if view.text != text{
+            view.text = text
+        }
+        if view.lexer?.id != lexer.id{
+            view.lexer = lexer
+        }
+        if view.enableSearch != enableSearch{
+            view.enableSearch = enableSearch
+        }
+        view.onSearchResult = onSearchResult
+        view.onSearching = onSearching
+        view.onSearchIndexChanged = onSearchIndexChanged
     }
     #endif
     
@@ -151,6 +196,10 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         wrappedView.delegate = context.coordinator
         wrappedView.theme = theme
         wrappedView.lexer = lexer
+        wrappedView.enableSearch = enableSearch
+        wrappedView.onSearchResult = onSearchResult
+        wrappedView.onSearching = onSearching
+        wrappedView.onSearchIndexChanged = onSearchIndexChanged
         wrappedView.contentTextView.insertionPointColor = custom.insertionPointColor()
         
         context.coordinator.wrappedView = wrappedView
@@ -164,9 +213,12 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
     public func updateNSView(_ view: SyntaxTextView, context: Context) {
         view.text = text
         view.previousSelectedRange = selectedRange
-        view.selectedRange = selectedRange
         view.lexer = lexer
         view.theme = theme
+        view.enableSearch = enableSearch
+        view.onSearchResult = onSearchResult
+        view.onSearching = onSearching
+        view.onSearchIndexChanged = onSearchIndexChanged
     }
     #endif
     

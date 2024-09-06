@@ -9,6 +9,10 @@
 import Foundation
 
 public struct DefaultSourceCodeTheme: SourceCodeTheme {
+    public var matchResultBgColor: Color = .systemYellow
+    
+    public var activeMatchResultBgColor: Color = .systemPink
+    
     public static func == (lhs: DefaultSourceCodeTheme, rhs: DefaultSourceCodeTheme) -> Bool {
         return true
     }

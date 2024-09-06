@@ -46,6 +46,24 @@ struct ThemeInfo {
 
 }
 
+
+
+public struct ContentSearchOptions:Decodable{
+    public var caseSensitive:Bool
+    public var matchMode:MatchMode
+    public static var defaultValue:ContentSearchOptions = .init(caseSensitive: false, matchMode: .contains)
+}
+
+public enum MatchMode:Int,Decodable, CaseIterable, Identifiable{
+    case contains
+    case matchesWord
+    case startsWith
+    case endsWith
+    case regex
+    
+    public var id: Self { self }
+}
+
 @IBDesignable
 open class SyntaxTextView: _View {
 
@@ -75,6 +93,264 @@ open class SyntaxTextView: _View {
         didSet{
             refreshColors()
         }
+    }
+    
+    var searchKey:String = ""
+    private var searchOptions:ContentSearchOptions = .init(caseSensitive: false, matchMode: .contains)
+    var enableSearch:Bool = false{
+        didSet{
+            if !enableSearch{
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
+                    searchKey = ""
+                    searchResult = []
+                    refreshColors()
+                }
+            }
+        }
+    }
+    private var isSearching:Bool = false{
+        didSet{
+            if isSearching{
+                onSearching()
+            }
+        }
+    }
+    var onSearching:()->Void = {}
+    var onSearchResult:(Int)->Void = {_ in }
+    var onSearchIndexChanged:(Int)->Void = {_ in }
+    private(set) var searchResult:[NSRange]=[]{
+        didSet{
+            DispatchQueue.main.async {[weak self] in
+                self?.refreshColors()
+            }
+        }
+    }
+    private(set) var selectedSearchResultIndex:Int = 0
+    
+    public func jumpToSearchResult(for index:Int,getFocus:Bool=false){
+        let index = min(index,searchResult.count-1)
+        if index >= 0{
+            let range = searchResult[index]
+            setSeletctTextRange(range, getFocus: getFocus)
+            
+            
+            let textStorage: NSTextStorage
+            
+            #if os(macOS)
+            textStorage = textView.textStorage!
+            #else
+            textStorage = textView.textStorage
+            #endif
+            textStorage.beginEditing()
+            if selectedSearchResultIndex >= 0 && selectedSearchResultIndex < searchResult.count{
+                let oldRange = searchResult[selectedSearchResultIndex]
+                var attr = [NSAttributedString.Key: Any]()
+                attr[.backgroundColor] = theme?.matchResultBgColor
+                textStorage.addAttributes(attr, range: oldRange)
+            }
+            var attr = [NSAttributedString.Key: Any]()
+            attr[.backgroundColor] = theme?.activeMatchResultBgColor
+            textStorage.addAttributes(attr, range: range)
+            textStorage.endEditing()
+        }
+        selectedSearchResultIndex = index
+        onSearchIndexChanged(index)
+    }
+    
+    private func restoreDefaultAttributes(){
+        
+        guard let theme = self.theme else {
+            return
+        }
+        
+        guard let themeInfo = self.themeInfo else {
+            return
+        }
+        guard let source = textView.text else {
+            return
+        }
+        let wholeRange = NSRange(location: 0, length: (source as NSString).length)
+        let textStorage: NSTextStorage
+#if os(macOS)
+        textStorage = textView.textStorage!
+#else
+        textStorage = textView.textStorage
+#endif
+        textStorage.beginEditing()
+        var attributes = [NSAttributedString.Key: Any]()
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.paragraphSpacing = 2.0
+        paragraphStyle.defaultTabInterval = themeInfo.spaceWidth * 4
+        paragraphStyle.tabStops = []
+        
+        attributes[.paragraphStyle] = paragraphStyle
+        for (attr, value) in theme.globalAttributes() {
+            attributes[attr] = value
+        }
+        attributes[.backgroundColor] = UIColor.clear
+        textStorage.setAttributes(attributes, range: wholeRange)
+        textStorage.endEditing()
+    }
+    
+    private func searchText(key: String, options: ContentSearchOptions, source:String, callback: @escaping (String,[NSRange]) -> Void) {
+        Task {
+            DispatchQueue.global(qos: .userInitiated).async {[weak self] in
+                guard let self else{return}
+                if key != self.searchKey{
+                    print("关键词已更改")
+                    return
+                }
+                var result: [NSRange] = []
+                var reOptions: NSRegularExpression.Options = []
+                if !options.caseSensitive {
+                    reOptions.formUnion(.caseInsensitive)
+                }
+                let pattern:String
+                switch options.matchMode {
+                case .contains:
+                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))"
+                case .matchesWord:
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                case .startsWith:
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))"
+                case .endsWith:
+                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                case .regex:
+                    pattern = key
+                }
+                
+                if let re = try? NSRegularExpression(pattern: pattern, options: reOptions) {
+                    let matches = re.matches(in: source, range: NSRange(location: 0, length: source.utf16.count))
+                    for match in matches {
+                        if key != self.searchKey{
+                            print("关键词已更改")
+                            return
+                        }
+                        if let range = Range(match.range, in: source) {
+                            result.append(source.nsRange(fromRange: range))
+                        }
+                    }
+                }
+                callback(key,result)
+            }
+        }
+    }
+        
+    func search(key: String, options: ContentSearchOptions){
+        searchKey = key
+        searchOptions = options
+        search()
+    }
+    
+    private var searchTimer:Timer?
+    
+    func search(){
+        searchTimer?.invalidate()
+        if searchKey.isEmpty{
+            isSearching = true
+            searchResult = []
+            return
+        }
+        searchTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { [weak self]_ in
+            guard let self else{return}
+            guard let source = textView.text else{return}
+            isSearching = true
+            searchText(key: searchKey, options: searchOptions, source: source) { key,result in
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
+                    if key != self.searchKey{
+                        print("关键词已更改")
+                        return
+                    }
+//                    self.isSearching = false
+                    self.searchResult = result
+//                    self.onSearchResult(result.count)
+                    if result.count > 0 && !isFirstResponder{
+                        self.jumpToSearchResult(for: 0, getFocus: false)
+                    }
+                }
+            }
+        })
+    }
+    
+    private func range(from nsRange: NSRange, in string: String) -> Range<String.Index>? {
+        guard
+            let from17 = string.index(string.startIndex, offsetBy: nsRange.location, limitedBy: string.endIndex),
+            let to17 = string.index(from17, offsetBy: nsRange.length, limitedBy: string.endIndex)
+        else { return nil }
+        
+        return from17..<to17
+    }
+    
+    func replace(index:Int,replaceTo:String,callback:@escaping () -> Void){
+        if var source = textView.text{
+            if index>=0 && index<searchResult.count{
+                if let range = range(from: searchResult[index], in: source){
+                    isSearching = true
+                    Task{
+                        DispatchQueue.global(qos:.userInitiated).async{[weak self] in
+                            guard let self else{return}
+                            source.replaceSubrange(range, with: replaceTo)
+                            let offset = replaceTo.count - searchResult[index].length
+                            for i in searchResult[index...].indices{
+                                searchResult[i].location += offset
+                            }
+                            searchResult.remove(at: index)
+                            DispatchQueue.main.async {[weak self] in
+                                guard let self else{return}
+                                isSearching = false
+                                onSearchResult(searchResult.count)
+//                                restoreDefaultAttributes()
+//                                text = source
+                                textView.text = source
+                                restoreDefaultAttributes()
+//                                updateColor(allowDelay: false)
+                                delegate?.didChangeText(self)
+                                jumpToSearchResult(for: index)
+                                refreshColors(allowDelay: false)
+//                                isSearching = false
+                            }
+                            callback()
+                        }
+                    }
+                    return
+                }
+            }
+        }
+        callback()
+    }
+    
+    func replaceAll(replaceTo:String,callback:@escaping () -> Void){
+        let taskID = UUID()
+        if var source = textView.text{
+            isSearching = true
+            let searchResult = self.searchResult
+            DispatchQueue.global(qos:.userInitiated).async{[weak self] in
+                guard let self else{return}
+                var offset:Int = 0
+                for nsRange in searchResult{
+                    var nsRangeFixed = NSRange(location: nsRange.location+offset, length: nsRange.length)
+                    if let range = self.range(from: nsRangeFixed, in: source){
+                        source.replaceSubrange(range, with: replaceTo)
+                    }
+                    offset += replaceTo.count - nsRange.length
+                }
+                self.searchResult = []
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
+                    isSearching = false
+                    onSearchResult(self.searchResult.count)
+                    textView.text = source
+                    restoreDefaultAttributes()
+                    delegate?.didChangeText(self)
+                    jumpToSearchResult(for: -1)
+                    refreshColors(allowDelay: false)
+                }
+                callback()
+            }
+        }
+        callback()
     }
 
     #if os(macOS)
@@ -121,6 +397,12 @@ open class SyntaxTextView: _View {
         textView = SyntaxTextView.createInnerTextView()
         super.init(coder: aDecoder)
         setup()
+    }
+    
+    deinit {
+        searchTimer?.invalidate()
+        refreshTimer?.invalidate()
+        updateColorTimer?.invalidate()
     }
     
     public var selectedRange:NSRange{
@@ -190,9 +472,17 @@ open class SyntaxTextView: _View {
         }
     }
     
-    func setSeletctTextRange(_ range:NSRange){
+    func setSeletctTextRange(_ range:NSRange,getFocus:Bool=true){
         updateSelectedRange(range)
-        self.becomeFirstResponder()
+        if getFocus{
+            self.becomeFirstResponder()
+        }
+        else{
+            if let cursorPosition = textView.selectedTextRange?.start{
+                let caretRect = textView.caretRect(for: cursorPosition)
+                textView.scrollRectToVisible(caretRect, animated: true)
+            }
+        }
     }
 
     #if os(macOS)
@@ -361,7 +651,8 @@ open class SyntaxTextView: _View {
             #else
             // If the user sets this property as soon as they create the view, we get a strange UIKit bug where the text often misses a final line in some Dynamic Type configurations. The text isn't actually missing: if you background the app then foreground it the text reappears just fine, so there's some sort of drawing sync problem. A simple fix for this is to give UIKit a tiny bit of time to create all its data before we trigger the update, so we push the updating work to the runloop.
             
-            DispatchQueue.main.async {
+            DispatchQueue.main.async {[weak self] in
+                guard let self else{return}
                 self.textView.text = newValue
                 self.textView.setNeedsDisplay()
                 self.refreshColors()
@@ -399,7 +690,8 @@ open class SyntaxTextView: _View {
                 let startIndex=text.index(text.startIndex, offsetBy: start)
                 let endIndex=text.index(startIndex, offsetBy: end - start)
                 
-                DispatchQueue.main.async {
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
                     self.textView.text.append(String(text[startIndex..<endIndex]))
 //                    self.textView.setNeedsDisplay()
 //                    self.refreshColors()
@@ -525,13 +817,13 @@ open class SyntaxTextView: _View {
         if theme == nil{return}
         let lexer = getLexer(source)
         Task{
-            DispatchQueue.global().async {
-                let tokens = lexer.getSavannaTokens(input: source)
+            DispatchQueue.global().async {[weak self] in
+                var tokens = lexer.getSavannaTokens(input: source)
                 let cachedTokens: [CachedToken] = tokens.map {
                     let nsRange = source.nsRange(fromRange: $0.range)
                     return CachedToken(token: $0, nsRange: nsRange)
                 }
-                self.cachedTokens = cachedTokens
+                self?.cachedTokens = cachedTokens
                 callback(source,cachedTokens)
             }
         }
@@ -542,7 +834,13 @@ open class SyntaxTextView: _View {
         guard let source = textView.text else {
             return
         }
-        if theme == nil{return}
+        guard let theme = self.theme else {
+            return
+        }
+        
+        guard let themeInfo = self.themeInfo else {
+            return
+        }
         
         let textStorage: NSTextStorage
         
@@ -559,20 +857,18 @@ open class SyntaxTextView: _View {
         if let cachedTokens = cachedTokens {
             updateAttributes(textStorage: textStorage, cachedTokens: cachedTokens, source: source)
         } else {
-            guard let theme = self.theme else {
-                return
-            }
-            
-            guard let themeInfo = self.themeInfo else {
-                return
-            }
             cacheToken() {source,cachedTokens in
-                DispatchQueue.main.async {
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
                     guard updateID == self.updateID else{
                         print("已更改")
                         return
                     }
                     self.createAttributes(updateID: updateID, theme: theme, themeInfo: themeInfo, textStorage: textStorage, cachedTokens: cachedTokens, source: source)
+                    if isSearching{
+                        isSearching = false
+                        onSearchResult(searchResult.count)
+                    }
                 }
             }
         }
@@ -629,7 +925,8 @@ open class SyntaxTextView: _View {
         let wholeRange = NSRange(location: 0, length: (source as NSString).length)
         let selectedRange = textView.selectedRange
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async {[weak self] in
+            guard let self else{return}
             guard updateID == self.updateID else{
                 print("已更改")
                 return
@@ -682,8 +979,30 @@ open class SyntaxTextView: _View {
                     attributesToAdd.append((theme.attributes(for: token), range))
                 }
             }
+            
+            // 搜索结果
+            if enableSearch{
+                for range in self.searchResult{
+                    guard updateID == self.updateID else{
+                        print("已更改")
+                        return
+                    }
+                    var attr = [NSAttributedString.Key: Any]()
+                    attr[.backgroundColor] = range == selectedRange ? theme.activeMatchResultBgColor : theme.matchResultBgColor
+                    attributesToAdd.append((attr,range))
+                }
+            }
+            
+//            if !self.isFirstResponder{
+//                // 选中文本
+//                var attr = [NSAttributedString.Key: Any]()
+//                attr[.backgroundColor] = UIColor.red
+//                attributesToAdd.append((attr,selectedRange))
+//            }
+            
 
-            DispatchQueue.main.async {
+            DispatchQueue.main.async {[weak self] in
+                guard let self else{return}
                 guard updateID == self.updateID else{
                     print("已更改")
                     return
@@ -691,6 +1010,10 @@ open class SyntaxTextView: _View {
                 textStorage.beginEditing()
                 textStorage.setAttributes(attributes, range: wholeRange)
                 for (attr, range) in attributesToAdd {
+                    guard updateID == self.updateID else{
+                        print("已更改")
+                        return
+                    }
                     textStorage.addAttributes(attr, range: range)
                 }
                 textStorage.endEditing()

@@ -9,6 +9,7 @@
 import Foundation
 
 public class SwiftLexer: SourceCodeRegexLexer {
+    public var id: String = "<Swift>"
 	
 	public init() {
 		

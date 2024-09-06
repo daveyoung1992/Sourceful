@@ -92,6 +92,7 @@ struct LanguageLexer:Decodable{
 }
 
 public class CustomLexer: SourceCodeRegexLexer,Decodable {
+    public var id: String
     private var generators:[TokenGenerator]=[]
     
     public func generators(source: String) -> [TokenGenerator] {
@@ -101,7 +102,7 @@ public class CustomLexer: SourceCodeRegexLexer,Decodable {
     
     
     required public init(from decoder: any Decoder) throws {
-        
+        id = "Custom"
         var container = try decoder.unkeyedContainer()
         
         while !container.isAtEnd {
@@ -131,6 +132,7 @@ public class CustomLexer: SourceCodeRegexLexer,Decodable {
             let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             let lexer = try decoder.decode(CustomLexer.self, from: data)
+            lexer.id = path
             return lexer
         }
         return EmptyLexer()

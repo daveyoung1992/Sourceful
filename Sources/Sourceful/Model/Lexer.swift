@@ -9,7 +9,7 @@
 import Foundation
 
 public protocol Lexer {
-	
+    var id:String {get}
 	func getSavannaTokens(input: String) -> [Token]
 	
 }

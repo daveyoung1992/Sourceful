@@ -9,6 +9,7 @@
 import Foundation
 
 public class JavaScriptLexer: SourceCodeRegexLexer {
+    public var id: String = "<JavaScript>"
     
     public init() {
         

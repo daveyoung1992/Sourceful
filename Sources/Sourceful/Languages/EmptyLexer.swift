@@ -8,6 +8,8 @@
 import Foundation
 
 public class EmptyLexer: SourceCodeRegexLexer {
+    public var id: String = "<Empty>"
+    
     
     public init() {
         

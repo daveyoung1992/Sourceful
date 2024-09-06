@@ -8,6 +8,7 @@
 import Foundation
 
 public class JavaLexer: SourceCodeRegexLexer {
+    public var id: String = "<Java>"
     
     public init() {
         

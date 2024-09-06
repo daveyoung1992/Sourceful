@@ -37,6 +37,7 @@ extension SourceCodeTheme {
 }
 
 public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
+    
     public static func == (lhs: CustomSourceCodeTheme, rhs: CustomSourceCodeTheme) -> Bool {
         return lhs.id == rhs.id
     }
@@ -77,12 +78,18 @@ public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
     
     public var foregroundColor: Color
     
+    public var matchResultBgColor: Color
+    
+    public var activeMatchResultBgColor: Color
+    
     enum CodingKeys: String, CodingKey {
         case lineNumberStyle
         case gutterStyle
         case fontStyle
         case backgroundColor
         case tokenColors
+        case matchResultBgColor
+        case activeMatchResultBgColor
     }
     
     public init(from decoder: any Decoder) throws {
@@ -90,6 +97,8 @@ public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
         let lnStyle = try container.decode(ThemeLineNumberStyle.self, forKey: .lineNumberStyle)
         let fontStyle = try container.decode(ThemeFontStyle.self, forKey: .fontStyle)
         let background = try container.decode(CodableColor.self, forKey: .backgroundColor)
+        let matchResultBgColor = try container.decode(CodableColor.self, forKey: .matchResultBgColor)
+        let activeMatchResultBgColor = try container.decode(CodableColor.self, forKey: .activeMatchResultBgColor)
         tokenColors = try container.decode([String:CodableColor].self, forKey: .tokenColors)
         
         self.lineNumbersStyle = LineNumbersStyle(font: Font(name: lnStyle.font, size: lnStyle.size) ?? .systemFont(ofSize: lnStyle.size), textColor: lnStyle.color.color)
@@ -101,6 +110,10 @@ public struct CustomSourceCodeTheme:SourceCodeTheme,Decodable{
         self.foregroundColor = fontStyle.color.color
         
         self.backgroundColor = background.color
+        
+        self.matchResultBgColor = matchResultBgColor.color
+        
+        self.activeMatchResultBgColor = activeMatchResultBgColor.color
     }
     public static func loadWithThemeFile(_ path:String) throws -> CustomSourceCodeTheme?{
         if let path = Bundle.main.path(forResource: path, ofType: "json"){

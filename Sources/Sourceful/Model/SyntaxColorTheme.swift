@@ -50,4 +50,7 @@ public protocol SyntaxColorTheme:Equatable {
 	func globalAttributes() -> [NSAttributedString.Key: Any]
 
 	func attributes(for token: Token) -> [NSAttributedString.Key: Any]
+    
+    var matchResultBgColor:Color{get}
+    var activeMatchResultBgColor:Color{get}
 }

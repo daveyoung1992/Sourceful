@@ -8,6 +8,7 @@
 import Foundation
 
 public class OCamlLexer: SourceCodeRegexLexer {
+    public var id: String = "<Ocam>"
     
     public init() {}
     
