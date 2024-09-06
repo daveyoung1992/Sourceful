@@ -42,15 +42,23 @@ class InnerTextView: TextView {
 	func invalidateCachedParagraphs() {
 		cachedParagraphs = nil
 	}
-    var langs:[String] = ["en-US","en"]
-    override var textInputMode: UITextInputMode?{
-        get{
-            if let inputMode = UITextInputMode.activeInputModes.first(where: { langs.contains($0.primaryLanguage ?? "") }) {
-                        return inputMode
-                    }
-            return .none
-        }
-    }
+//    var langsWithInputMethod:[String] = ["zh","ja","ko","ar","he","ru","th"]
+//    var langs:[String] = ["en-US","en"]
+//    override var textInputMode: UITextInputMode?{
+//        get{
+//            let currentInputMode = super.textInputMode
+//            if let currentLanguage = currentInputMode?.primaryLanguage,
+//               langs.contains(where: {currentLanguage.hasPrefix($0)}){
+//                if let inputMode = UITextInputMode.activeInputModes.first(where: { langsWithInputMethod.contains($0.primaryLanguage ?? "") }) {
+//                    return inputMode
+//                }
+//            }
+//            if let inputMode = UITextInputMode.activeInputModes.first(where: { langs.contains($0.primaryLanguage ?? "") }) {
+//                return inputMode
+//            }
+//            return currentInputMode
+//        }
+//    }
 	
 	func hideGutter() {
 		gutterWidth = theme?.gutterStyle.minimumWidth ?? 0.0
