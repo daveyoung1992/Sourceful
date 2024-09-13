@@ -104,14 +104,6 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         self.textView = SyntaxTextView()
     }
     
-    public func goLine(_ line:Int){
-        textView.goLine(line)
-    }
-    
-    public func goRange(_ range:NSRange,getFocus:Bool=true){
-        textView.setSeletctTextRange(range,getFocus:getFocus)
-    }
-    
     public func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
@@ -123,20 +115,6 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         set{
             textView.previousSelectedRange = newValue
         }
-    }
-    
-    public func jumpToSearchResult(for index:Int,getFocus:Bool=false){
-        textView.jumpToSearchResult(for: index, getFocus: getFocus)
-    }
-    
-    public func search(key: String, options: ContentSearchOptions){
-        textView.search(key: key, options: options)
-    }
-    public func replace(index:Int,replaceTo:String,callback:@escaping () -> Void){
-        textView.replace(index: index, replaceTo: replaceTo, callback: callback)
-    }
-    public func replaceAll(replaceTo:String,callback:@escaping () -> Void){
-        textView.replaceAll(replaceTo: replaceTo, callback: callback)
     }
     #if os(iOS)
 
@@ -257,6 +235,52 @@ extension SourceCodeTextEditor {
         public func textViewDidBeginEditing(_ syntaxTextView: SyntaxTextView) {
             parent.custom.textViewDidBeginEditing(parent)
         }
+    }
+}
+
+// MARK: - 跳转
+extension SourceCodeTextEditor{
+    public func goLine(_ line:Int){
+        textView.goLine(line)
+    }
+    
+    public func goRange(_ range:NSRange,getFocus:Bool=true){
+        textView.setSeletctTextRange(range,getFocus:getFocus)
+    }
+}
+
+//MARK: - 查找替换
+extension SourceCodeTextEditor{
+    public func jumpToSearchResult(for index:Int,getFocus:Bool=false){
+        textView.jumpToSearchResult(for: index, getFocus: getFocus)
+    }
+    
+    public func search(key: String, options: ContentSearchOptions){
+        textView.search(key: key, options: options)
+    }
+    public func replace(index:Int,replaceTo:String,callback:@escaping () -> Void){
+        textView.replace(index: index, replaceTo: replaceTo, callback: callback)
+    }
+    public func replaceAll(key:String,to replaceText:String, options:ContentSearchOptions,callback:@escaping () -> Void){
+        textView.replaceAll(key: key, to: replaceText, options: options, callback: callback)
+    }
+}
+
+//MARK: - 撤销/重做
+extension SourceCodeTextEditor{
+    public var canUndo:Bool{
+        textView.canUndo
+    }
+    public var canRedo:Bool{
+        textView.canRedo
+    }
+    
+    public func undo(){
+        textView.undo()
+    }
+    
+    public func redo(){
+        textView.redo()
     }
 }
 

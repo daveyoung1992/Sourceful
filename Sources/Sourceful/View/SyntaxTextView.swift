@@ -94,264 +94,6 @@ open class SyntaxTextView: _View {
             refreshColors()
         }
     }
-    
-    var searchKey:String = ""
-    private var searchOptions:ContentSearchOptions = .init(caseSensitive: false, matchMode: .contains)
-    var enableSearch:Bool = false{
-        didSet{
-            if !enableSearch{
-                DispatchQueue.main.async {[weak self] in
-                    guard let self else{return}
-                    searchKey = ""
-                    searchResult = []
-                    refreshColors()
-                }
-            }
-        }
-    }
-    private var isSearching:Bool = false{
-        didSet{
-            if isSearching{
-                onSearching()
-            }
-        }
-    }
-    var onSearching:()->Void = {}
-    var onSearchResult:(Int)->Void = {_ in }
-    var onSearchIndexChanged:(Int)->Void = {_ in }
-    private(set) var searchResult:[NSRange]=[]{
-        didSet{
-            DispatchQueue.main.async {[weak self] in
-                self?.refreshColors()
-            }
-        }
-    }
-    private(set) var selectedSearchResultIndex:Int = 0
-    
-    public func jumpToSearchResult(for index:Int,getFocus:Bool=false){
-        let index = min(index,searchResult.count-1)
-        if index >= 0{
-            let range = searchResult[index]
-            setSeletctTextRange(range, getFocus: getFocus)
-            
-            
-            let textStorage: NSTextStorage
-            
-            #if os(macOS)
-            textStorage = textView.textStorage!
-            #else
-            textStorage = textView.textStorage
-            #endif
-            textStorage.beginEditing()
-            if selectedSearchResultIndex >= 0 && selectedSearchResultIndex < searchResult.count{
-                let oldRange = searchResult[selectedSearchResultIndex]
-                var attr = [NSAttributedString.Key: Any]()
-                attr[.backgroundColor] = theme?.matchResultBgColor
-                textStorage.addAttributes(attr, range: oldRange)
-            }
-            var attr = [NSAttributedString.Key: Any]()
-            attr[.backgroundColor] = theme?.activeMatchResultBgColor
-            textStorage.addAttributes(attr, range: range)
-            textStorage.endEditing()
-        }
-        selectedSearchResultIndex = index
-        onSearchIndexChanged(index)
-    }
-    
-    private func restoreDefaultAttributes(){
-        
-        guard let theme = self.theme else {
-            return
-        }
-        
-        guard let themeInfo = self.themeInfo else {
-            return
-        }
-        guard let source = textView.text else {
-            return
-        }
-        let wholeRange = NSRange(location: 0, length: (source as NSString).length)
-        let textStorage: NSTextStorage
-#if os(macOS)
-        textStorage = textView.textStorage!
-#else
-        textStorage = textView.textStorage
-#endif
-        textStorage.beginEditing()
-        var attributes = [NSAttributedString.Key: Any]()
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacing = 2.0
-        paragraphStyle.defaultTabInterval = themeInfo.spaceWidth * 4
-        paragraphStyle.tabStops = []
-        
-        attributes[.paragraphStyle] = paragraphStyle
-        for (attr, value) in theme.globalAttributes() {
-            attributes[attr] = value
-        }
-        attributes[.backgroundColor] = UIColor.clear
-        textStorage.setAttributes(attributes, range: wholeRange)
-        textStorage.endEditing()
-    }
-    
-    private func searchText(key: String, options: ContentSearchOptions, source:String, callback: @escaping (String,[NSRange]) -> Void) {
-        Task {
-            DispatchQueue.global(qos: .userInitiated).async {[weak self] in
-                guard let self else{return}
-                if key != self.searchKey{
-                    print("关键词已更改")
-                    return
-                }
-                var result: [NSRange] = []
-                var reOptions: NSRegularExpression.Options = []
-                if !options.caseSensitive {
-                    reOptions.formUnion(.caseInsensitive)
-                }
-                let pattern:String
-                switch options.matchMode {
-                case .contains:
-                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))"
-                case .matchesWord:
-                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
-                case .startsWith:
-                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))"
-                case .endsWith:
-                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
-                case .regex:
-                    pattern = key
-                }
-                
-                if let re = try? NSRegularExpression(pattern: pattern, options: reOptions) {
-                    let matches = re.matches(in: source, range: NSRange(location: 0, length: source.utf16.count))
-                    for match in matches {
-                        if key != self.searchKey{
-                            print("关键词已更改")
-                            return
-                        }
-                        if let range = Range(match.range, in: source) {
-                            result.append(source.nsRange(fromRange: range))
-                        }
-                    }
-                }
-                callback(key,result)
-            }
-        }
-    }
-        
-    func search(key: String, options: ContentSearchOptions){
-        searchKey = key
-        searchOptions = options
-        search()
-    }
-    
-    private var searchTimer:Timer?
-    
-    func search(){
-        searchTimer?.invalidate()
-        if searchKey.isEmpty{
-            isSearching = true
-            searchResult = []
-            return
-        }
-        searchTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { [weak self]_ in
-            guard let self else{return}
-            guard let source = textView.text else{return}
-            isSearching = true
-            searchText(key: searchKey, options: searchOptions, source: source) { key,result in
-                DispatchQueue.main.async {[weak self] in
-                    guard let self else{return}
-                    if key != self.searchKey{
-                        print("关键词已更改")
-                        return
-                    }
-//                    self.isSearching = false
-                    self.searchResult = result
-//                    self.onSearchResult(result.count)
-                    if result.count > 0 && !isFirstResponder{
-                        self.jumpToSearchResult(for: 0, getFocus: false)
-                    }
-                }
-            }
-        })
-    }
-    
-    private func range(from nsRange: NSRange, in string: String) -> Range<String.Index>? {
-        guard
-            let from17 = string.index(string.startIndex, offsetBy: nsRange.location, limitedBy: string.endIndex),
-            let to17 = string.index(from17, offsetBy: nsRange.length, limitedBy: string.endIndex)
-        else { return nil }
-        
-        return from17..<to17
-    }
-    
-    func replace(index:Int,replaceTo:String,callback:@escaping () -> Void){
-        if var source = textView.text{
-            if index>=0 && index<searchResult.count{
-                if let range = range(from: searchResult[index], in: source){
-                    isSearching = true
-                    Task{
-                        DispatchQueue.global(qos:.userInitiated).async{[weak self] in
-                            guard let self else{return}
-                            source.replaceSubrange(range, with: replaceTo)
-                            let offset = replaceTo.count - searchResult[index].length
-                            for i in searchResult[index...].indices{
-                                searchResult[i].location += offset
-                            }
-                            searchResult.remove(at: index)
-                            DispatchQueue.main.async {[weak self] in
-                                guard let self else{return}
-                                isSearching = false
-                                onSearchResult(searchResult.count)
-//                                restoreDefaultAttributes()
-//                                text = source
-                                textView.text = source
-                                restoreDefaultAttributes()
-//                                updateColor(allowDelay: false)
-                                delegate?.didChangeText(self)
-                                jumpToSearchResult(for: index)
-                                refreshColors(allowDelay: false)
-//                                isSearching = false
-                            }
-                            callback()
-                        }
-                    }
-                    return
-                }
-            }
-        }
-        callback()
-    }
-    
-    func replaceAll(replaceTo:String,callback:@escaping () -> Void){
-        let taskID = UUID()
-        if var source = textView.text{
-            isSearching = true
-            let searchResult = self.searchResult
-            DispatchQueue.global(qos:.userInitiated).async{[weak self] in
-                guard let self else{return}
-                var offset:Int = 0
-                for nsRange in searchResult{
-                    var nsRangeFixed = NSRange(location: nsRange.location+offset, length: nsRange.length)
-                    if let range = self.range(from: nsRangeFixed, in: source){
-                        source.replaceSubrange(range, with: replaceTo)
-                    }
-                    offset += replaceTo.count - nsRange.length
-                }
-                self.searchResult = []
-                DispatchQueue.main.async {[weak self] in
-                    guard let self else{return}
-                    isSearching = false
-                    onSearchResult(self.searchResult.count)
-                    textView.text = source
-                    restoreDefaultAttributes()
-                    delegate?.didChangeText(self)
-                    jumpToSearchResult(for: -1)
-                    refreshColors(allowDelay: false)
-                }
-                callback()
-            }
-        }
-        callback()
-    }
 
     #if os(macOS)
 
@@ -1020,6 +762,344 @@ open class SyntaxTextView: _View {
             }
         }
     }
+    
+    // MARK: - 查找替换
+    
+    var ignoreTextChange:Bool = false
+    
+    var searchKey:String = ""
+    private var searchOptions:ContentSearchOptions = .init(caseSensitive: false, matchMode: .contains)
+    var enableSearch:Bool = false{
+        didSet{
+            if !enableSearch{
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
+                    searchKey = ""
+                    searchResult = []
+                    refreshColors()
+                }
+            }
+        }
+    }
+    private var isSearching:Bool = false{
+        didSet{
+            if isSearching{
+                onSearching()
+            }
+        }
+    }
+    var onSearching:()->Void = {}
+    var onSearchResult:(Int)->Void = {_ in }
+    var onSearchIndexChanged:(Int)->Void = {_ in }
+    private(set) var searchResult:[NSRange]=[]{
+        didSet{
+            DispatchQueue.main.async {[weak self] in
+                self?.refreshColors()
+            }
+        }
+    }
+    private(set) var selectedSearchResultIndex:Int = 0
+    
+    public func jumpToSearchResult(for index:Int,getFocus:Bool=false){
+        let index = min(index,searchResult.count-1)
+        if index >= 0{
+            let range = searchResult[index]
+            setSeletctTextRange(range, getFocus: getFocus)
+            
+            
+            let textStorage: NSTextStorage
+            
+            #if os(macOS)
+            textStorage = textView.textStorage!
+            #else
+            textStorage = textView.textStorage
+            #endif
+            textStorage.beginEditing()
+            if selectedSearchResultIndex >= 0 && selectedSearchResultIndex < searchResult.count{
+                let oldRange = searchResult[selectedSearchResultIndex]
+                var attr = [NSAttributedString.Key: Any]()
+                attr[.backgroundColor] = theme?.matchResultBgColor
+                textStorage.addAttributes(attr, range: oldRange)
+            }
+            var attr = [NSAttributedString.Key: Any]()
+            attr[.backgroundColor] = theme?.activeMatchResultBgColor
+            textStorage.addAttributes(attr, range: range)
+            textStorage.endEditing()
+        }
+        selectedSearchResultIndex = index
+        onSearchIndexChanged(index)
+    }
+    
+    private func restoreDefaultAttributes(){
+        
+        guard let theme = self.theme else {
+            return
+        }
+        
+        guard let themeInfo = self.themeInfo else {
+            return
+        }
+        guard let source = textView.text else {
+            return
+        }
+        let wholeRange = NSRange(location: 0, length: (source as NSString).length)
+        let textStorage: NSTextStorage
+#if os(macOS)
+        textStorage = textView.textStorage!
+#else
+        textStorage = textView.textStorage
+#endif
+        textStorage.beginEditing()
+        var attributes = [NSAttributedString.Key: Any]()
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.paragraphSpacing = 2.0
+        paragraphStyle.defaultTabInterval = themeInfo.spaceWidth * 4
+        paragraphStyle.tabStops = []
+        
+        attributes[.paragraphStyle] = paragraphStyle
+        for (attr, value) in theme.globalAttributes() {
+            attributes[attr] = value
+        }
+        attributes[.backgroundColor] = UIColor.clear
+        textStorage.setAttributes(attributes, range: wholeRange)
+        textStorage.endEditing()
+    }
+    
+    private func searchText(key: String, options: ContentSearchOptions, source:String, callback: @escaping (String,[NSRange]) -> Void) {
+        Task {
+            DispatchQueue.global(qos: .userInitiated).async {[weak self] in
+                guard let self else{return}
+                if key != self.searchKey{
+                    print("关键词已更改")
+                    return
+                }
+                var result: [NSRange] = []
+                var reOptions: NSRegularExpression.Options = []
+                if !options.caseSensitive {
+                    reOptions.formUnion(.caseInsensitive)
+                }
+                let pattern:String
+                switch options.matchMode {
+                case .contains:
+                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))"
+                case .matchesWord:
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                case .startsWith:
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))"
+                case .endsWith:
+                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                case .regex:
+                    pattern = key
+                }
+                
+                if let re = try? NSRegularExpression(pattern: pattern, options: reOptions) {
+                    let matches = re.matches(in: source, range: NSRange(location: 0, length: source.utf16.count))
+                    for match in matches {
+                        if key != self.searchKey{
+                            print("关键词已更改")
+                            return
+                        }
+                        if let range = Range(match.range, in: source) {
+                            result.append(source.nsRange(fromRange: range))
+                        }
+                    }
+                }
+                callback(key,result)
+            }
+        }
+    }
+        
+    func search(key: String, options: ContentSearchOptions){
+        searchKey = key
+        searchOptions = options
+        search()
+    }
+    
+    private var searchTimer:Timer?
+    
+    func search(){
+        searchTimer?.invalidate()
+        if searchKey.isEmpty{
+            isSearching = true
+            searchResult = []
+            return
+        }
+        searchTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { [weak self]_ in
+            guard let self else{return}
+            guard let source = textView.text else{return}
+            isSearching = true
+            searchText(key: searchKey, options: searchOptions, source: source) { key,result in
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
+                    if key != self.searchKey{
+                        print("关键词已更改")
+                        return
+                    }
+//                    self.isSearching = false
+                    self.searchResult = result
+//                    self.onSearchResult(result.count)
+                    if result.count > 0 && !isFirstResponder{
+                        self.jumpToSearchResult(for: 0, getFocus: false)
+                    }
+                }
+            }
+        })
+    }
+    
+    private func range(from nsRange: NSRange, in string: String) -> Range<String.Index>? {
+        guard
+            let from17 = string.index(string.startIndex, offsetBy: nsRange.location, limitedBy: string.endIndex),
+            let to17 = string.index(from17, offsetBy: nsRange.length, limitedBy: string.endIndex)
+        else { return nil }
+        
+        return from17..<to17
+    }
+    
+    func replace(index:Int,replaceTo:String,callback:@escaping () -> Void){
+        if var source = textView.text{
+            if index>=0 && index<searchResult.count{
+                DispatchQueue.global(qos:.userInitiated).async{[weak self] in
+                    guard let self else{return}
+                    let range = searchResult[index]
+                    let offset = replaceTo.count - searchResult[index].length
+                    for i in searchResult[index...].indices{
+                        searchResult[i].location += offset
+                    }
+                    searchResult.remove(at: index)
+                    DispatchQueue.main.async {[weak self] in
+                        guard let self else{return}
+                        ignoreTextChange = true
+                        textView.replace(to: replaceTo, in: range)
+                        onSearchResult(searchResult.count)
+//                        restoreDefaultAttributes()
+                        delegate?.didChangeText(self)
+                        jumpToSearchResult(for: index)
+                        refreshColors(allowDelay: false)
+                        ignoreTextChange = false
+                    }
+                    callback()
+                    return
+                }
+            }
+        }
+        callback()
+    }
+    func replaceAll(key:String, to replaceText:String, options: ContentSearchOptions,callback:@escaping () -> Void){
+        let taskID = UUID()
+        if var source = textView.text{
+            isSearching = true
+            let searchResult = self.searchResult
+            DispatchQueue.global(qos: .userInitiated).async{[weak self] in
+                guard let self else{return} 
+                print("Step1.\(Date().timeIntervalSince1970)")
+                let pattern:String
+                switch options.matchMode {
+                case .contains:
+                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))"
+                case .matchesWord:
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                case .startsWith:
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))"
+                case .endsWith:
+                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                case .regex:
+                    pattern = key
+                }
+                
+                var reOptions: NSRegularExpression.Options = []
+                if !options.caseSensitive {
+                    reOptions.formUnion(.caseInsensitive)
+                }
+                if let re = try? NSRegularExpression(pattern: pattern, options: reOptions) {
+                    source = re.stringByReplacingMatches(in: source, range: NSRange(location: 0, length: source.count), withTemplate: replaceText)
+                }
+                print("Step2.\(Date().timeIntervalSince1970)")
+                self.searchResult = []
+                DispatchQueue.main.async {[weak self] in
+                    guard let self else{return}
+                    isSearching = false
+                    onSearchResult(self.searchResult.count)
+                    ignoreTextChange = true
+                    print("Step4.\(Date().timeIntervalSince1970)")
+                    let undoManager = textView.undoManager
+                    let oldText = self.textView.text
+                    undoManager?.registerUndo(withTarget: self, handler: {[weak self] target in
+                        guard let self else { return }
+                        let undoManager = textView.undoManager
+                        
+                        // 执行撤销操作，同时将替换操作保存为 redo 操作
+                        undoManager?.registerUndo(withTarget: self, handler: { [weak self] target in
+                            guard let self else { return }
+                            self.replaceAll(key: key, to: replaceText, options: options, callback: {})
+                        })
+                        
+                        // 替换为旧文本
+                        textView.textStorage.replaceCharacters(in: .init(location: 0, length: textView.text.count), with: oldText ?? "")
+                    })
+                    textView.textStorage.replaceCharacters(in: .init(location: 0, length: textView.text.count), with: source)
+                    print("Step5.\(Date().timeIntervalSince1970)")
+                    delegate?.didChangeText(self)
+                    jumpToSearchResult(for: -1)
+                    refreshColors(allowDelay: false)
+                    ignoreTextChange = false
+                    print("Step6.\(Date().timeIntervalSince1970)")
+                }
+                print("Step3.\(Date().timeIntervalSince1970)")
+                callback()
+            }
+        }
+        else{
+            callback()
+        }
+    }
 
+    
+    // MARK: - 撤销/重做
 
+    var canUndo:Bool{
+        textView.canUndo
+    }
+    
+    var canRedo:Bool{
+        textView.canRedo
+    }
+    
+    func undo(){
+        textView.undo()
+        restoreDefaultAttributes()
+        delegate?.didChangeText(self)
+        refreshColors(allowDelay: false)
+    }
+    
+    func redo(){
+        textView.redo()
+        restoreDefaultAttributes()
+        delegate?.didChangeText(self)
+        refreshColors(allowDelay: false)
+    }
 }
+//extension String {
+//    func replaceOccurrencesWithNSRange(_ ranges: [NSRange], replaceTo: String) -> String {
+//        var buffer = [Character]()
+//        buffer.reserveCapacity(self.count + (replaceTo.count - ranges.reduce(0) { $0 + $1.length }) * ranges.count)
+//        
+//        var lastIndex = 0  // 记录字符的索引位置
+//        
+//        for nsRange in ranges {
+//            let lowerBound = self.utf16.index(self.utf16.startIndex, offsetBy: nsRange.location)
+//            let upperBound = self.utf16.index(lowerBound, offsetBy: nsRange.length)
+//            
+//            // 将范围内的内容拼接
+//            buffer.append(contentsOf: self.utf16.prefix(upTo: lowerBound).map { Character(UnicodeScalar($0)!) })
+//            // 拼接替换内容
+//            buffer.append(contentsOf: replaceTo)
+//            
+//            lastIndex = nsRange.location + nsRange.length
+//        }
+//        
+//        // 拼接剩余未替换的内容
+//        buffer.append(contentsOf: self.utf16.suffix(from: self.utf16.index(self.utf16.startIndex, offsetBy: lastIndex)).map { Character(UnicodeScalar($0)!) })
+//        
+//        return String(buffer)
+//    }
+//}

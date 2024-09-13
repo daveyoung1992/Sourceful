@@ -155,12 +155,13 @@ extension SyntaxTextView {
 	}
     
     func didUpdateText() {
-        
-        if self.enableSearch && !self.searchKey.isEmpty{
-            self.search()
-        }
-        else{
-            refreshColors()
+        if !ignoreTextChange{
+            if self.enableSearch && !self.searchKey.isEmpty{
+                self.search()
+            }
+            else{
+                refreshColors()
+            }
         }
         delegate?.didChangeText(self)
         
@@ -225,12 +226,14 @@ extension SyntaxTextView {
 		}
 		
 		open func textViewDidChange(_ textView: UITextView) {
-			
-			didUpdateText()
-            Task{
-                delegate?.didChangeSelectedRange(self, selectedRange: textView.selectedRange, textPosition: self.getTextPostion(for: textView.selectedRange))
+            if !ignoreTextChange{
+                didUpdateText()
+                Task{
+                    delegate?.didChangeSelectedRange(self, selectedRange: textView.selectedRange, textPosition: self.getTextPostion(for: textView.selectedRange))
+                }
+                
+                contentDidChangeSelection()
             }
-            contentDidChangeSelection()
 		}
 		
         func refreshColors(allowDelay:Bool=true) {
@@ -395,7 +398,28 @@ extension SyntaxTextView {
 		}
 		
 		if origInsertingText == "\n" {
-
+            let undoManager = textView.undoManager
+            let oldText = self.getText(in: selectedRange)
+            let newRange = NSRange(location: selectedRange.location, length: insertingText.count)
+            undoManager?.registerUndo(withTarget: self, handler: {[weak self] target in
+                guard let self else { return }
+                let undoManager = textView.undoManager
+                
+                // 执行撤销操作，同时将替换操作保存为 redo 操作
+                undoManager?.registerUndo(withTarget: self, handler: { [weak self] target in
+                    guard let self else { return }
+                    self.selectedRange = selectedRange
+                    self.insertText(insertingText)
+                })
+                
+                // 替换为旧文本
+                textStorage.replaceCharacters(in: newRange, with: oldText ?? "")
+                self.selectedRange = selectedRange
+                
+                didUpdateText()
+                
+                updateSelectedRange(selectedRange)
+            })
 			textStorage.replaceCharacters(in: selectedRange, with: insertingText)
 			
 			didUpdateText()
@@ -407,6 +431,13 @@ extension SyntaxTextView {
 		
 		return true
 	}
+    
+    func getText(in nsRange:NSRange)->String?{
+        if let textRange = textView.textRange(from: textView.position(from: textView.beginningOfDocument, offset: nsRange.lowerBound)!, to: textView.position(from: textView.beginningOfDocument, offset: nsRange.upperBound)!){
+            return textView.text(in: textRange)
+        }
+        return nil
+    }
 	
 	func contentDidChangeSelection() {
 		
