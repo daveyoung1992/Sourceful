@@ -104,6 +104,19 @@ public struct SourceCodeTextEditor: _ViewRepresentable {
         self.textView = SyntaxTextView()
     }
     
+    public var undoManage:MyUndoManager?{
+        get{
+            textView.undoManager
+        }
+        set{
+            textView.undoManager = newValue
+        }
+    }
+    
+    public var innerTextView:InnerTextView{
+        textView.textView
+    }
+    
     public func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }

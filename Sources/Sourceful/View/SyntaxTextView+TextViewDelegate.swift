@@ -398,28 +398,29 @@ extension SyntaxTextView {
 		}
 		
 		if origInsertingText == "\n" {
-            let undoManager = textView.undoManager
-            let oldText = self.getText(in: selectedRange)
-            let newRange = NSRange(location: selectedRange.location, length: insertingText.count)
-            undoManager?.registerUndo(withTarget: self, handler: {[weak self] target in
-                guard let self else { return }
-                let undoManager = textView.undoManager
-                
-                // 执行撤销操作，同时将替换操作保存为 redo 操作
-                undoManager?.registerUndo(withTarget: self, handler: { [weak self] target in
-                    guard let self else { return }
-                    self.selectedRange = selectedRange
-                    self.insertText(insertingText)
+            if let undoManager = textView.myUndoManager{
+                let oldText = self.getText(in: selectedRange)
+                let newRange = NSRange(location: selectedRange.location, length: insertingText.count)
+                undoManager.registerUndo(withTarget: undoManager, handler: {this in
+                    guard let target = this.target else { return }
+                    let undoManager = target.myUndoManager
+                    
+                    // 执行撤销操作，同时将替换操作保存为 redo 操作
+                    undoManager?.registerUndo(withTarget: this, handler: {this in
+                        guard let target = this.target else { return }
+                        target.selectedRange = selectedRange
+                        target.parent?.insertText(insertingText)
+                    })
+                    
+                    // 替换为旧文本
+                    target.textStorage.replaceCharacters(in: newRange, with: oldText ?? "")
+                    target.selectedRange = selectedRange
+                    
+                    target.parent?.didUpdateText()
+                    
+                    target.parent?.updateSelectedRange(selectedRange)
                 })
-                
-                // 替换为旧文本
-                textStorage.replaceCharacters(in: newRange, with: oldText ?? "")
-                self.selectedRange = selectedRange
-                
-                didUpdateText()
-                
-                updateSelectedRange(selectedRange)
-            })
+            }
 			textStorage.replaceCharacters(in: selectedRange, with: insertingText)
 			
 			didUpdateText()

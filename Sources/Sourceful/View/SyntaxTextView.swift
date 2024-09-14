@@ -82,6 +82,15 @@ open class SyntaxTextView: _View {
             refreshColors()
         }
     }
+    
+    open override var undoManager: MyUndoManager?{
+        get{
+            textView.myUndoManager
+        }
+        set{
+            textView.myUndoManager = newValue
+        }
+    }
 
     var ignoreSelectionChange = false
     
@@ -132,12 +141,16 @@ open class SyntaxTextView: _View {
     public override init(frame: CGRect) {
         textView = SyntaxTextView.createInnerTextView()
         super.init(frame: frame)
+        textView.parent = self
+        textView.undoManager?.disableUndoRegistration()
         setup()
     }
     
     public required init?(coder aDecoder: NSCoder) {
         textView = SyntaxTextView.createInnerTextView()
         super.init(coder: aDecoder)
+        textView.parent = self
+        textView.undoManager?.disableUndoRegistration()
         setup()
     }
     
@@ -995,13 +1008,13 @@ open class SyntaxTextView: _View {
                 let pattern:String
                 switch options.matchMode {
                 case .contains:
-                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))"
+                    pattern = "\(NSRegularExpression.escapedPattern(for: key))"
                 case .matchesWord:
-                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: key))\\b"
                 case .startsWith:
-                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: searchKey))"
+                    pattern = "\\b\(NSRegularExpression.escapedPattern(for: key))"
                 case .endsWith:
-                    pattern = "\(NSRegularExpression.escapedPattern(for: searchKey))\\b"
+                    pattern = "\(NSRegularExpression.escapedPattern(for: key))\\b"
                 case .regex:
                     pattern = key
                 }
@@ -1021,21 +1034,22 @@ open class SyntaxTextView: _View {
                     onSearchResult(self.searchResult.count)
                     ignoreTextChange = true
                     print("Step4.\(Date().timeIntervalSince1970)")
-                    let undoManager = textView.undoManager
-                    let oldText = self.textView.text
-                    undoManager?.registerUndo(withTarget: self, handler: {[weak self] target in
-                        guard let self else { return }
-                        let undoManager = textView.undoManager
-                        
-                        // 执行撤销操作，同时将替换操作保存为 redo 操作
-                        undoManager?.registerUndo(withTarget: self, handler: { [weak self] target in
-                            guard let self else { return }
-                            self.replaceAll(key: key, to: replaceText, options: options, callback: {})
+                    if let undoManager = textView.myUndoManager,undoManager.isUndoRegistrationEnabled{
+                        let oldText = self.textView.text
+                        undoManager.registerUndo(withTarget: undoManager, handler: {this in
+                            guard let target = this.target else { return }
+                            
+                            // 执行撤销操作，同时将替换操作保存为 redo 操作
+                            this.registerUndo(withTarget: this, handler: { this in
+                                guard let target = this.target else { return }
+                                target.replaceAll(key: key, to: replaceText, options: options, callback: {})
+                            })
+                            this.disableUndoRegistration()
+                            // 替换为旧文本
+                            target.textStorage.replaceCharacters(in: .init(location: 0, length: target.text.count), with: oldText ?? "")
+                            this.enableUndoRegistration()
                         })
-                        
-                        // 替换为旧文本
-                        textView.textStorage.replaceCharacters(in: .init(location: 0, length: textView.text.count), with: oldText ?? "")
-                    })
+                    }
                     textView.textStorage.replaceCharacters(in: .init(location: 0, length: textView.text.count), with: source)
                     print("Step5.\(Date().timeIntervalSince1970)")
                     delegate?.didChangeText(self)
@@ -1065,17 +1079,21 @@ open class SyntaxTextView: _View {
     }
     
     func undo(){
-        textView.undo()
-        restoreDefaultAttributes()
-        delegate?.didChangeText(self)
-        refreshColors(allowDelay: false)
+        if textView.canUndo{
+            textView.undo()
+            restoreDefaultAttributes()
+            delegate?.didChangeText(self)
+            refreshColors(allowDelay: false)
+        }
     }
     
     func redo(){
-        textView.redo()
-        restoreDefaultAttributes()
-        delegate?.didChangeText(self)
-        refreshColors(allowDelay: false)
+        if textView.canRedo{
+            textView.redo()
+            restoreDefaultAttributes()
+            delegate?.didChangeText(self)
+            refreshColors(allowDelay: false)
+        }
     }
 }
 //extension String {
