@@ -241,32 +241,11 @@ public class InnerTextView: TextView {
 //    }
     
     public override func insertText(_ text: String) {
-        print("insertText")
         if let textRange = selectedTextRange{
             if myUndoManager?.isUndoRegistrationEnabled ?? false{
                 myUndoManager?.addInsertUndo(textRange: textRange, text: text, textView: self)
             }
             super.insertText(text)
-//            let oldText = self.text(in: textRange) ?? ""
-//            print("insert",textRange,text,oldText)
-//            if let newRange = self.textRange(from: textRange.start, to: self.position(from: textRange.start, offset: text.count)!){
-//                if myUndoManager?.isUndoRegistrationEnabled ?? false{
-//                    if let undoManager = myUndoManager{
-//                        undoManager.registerUndo(withTarget: self, handler: { target in
-//                            if let target = undoManager.target{
-//                                undoManager.registerUndo(withTarget: target, handler: { _ in
-//                                    target.selectedTextRange = textRange
-//                                    target.insertText(text)
-//                                })
-//                                undoManager.disableUndoRegistration()
-//                                target.replace(newRange, withText: oldText)
-//                                undoManager.enableUndoRegistration()
-//                            }
-//                        })
-//                    }
-//                }
-//                super.insertText(text)
-//            }
         }
     }
     
@@ -276,46 +255,20 @@ public class InnerTextView: TextView {
                 myUndoManager?.addDeleteUndo(textRange: textRange, textView: self)
             }
         }
-//        var deletedTextRange = self.selectedTextRange
-//        if deletedTextRange == nil {return}
-//        if deletedTextRange!.start == self.beginningOfDocument{return}
-//        if deletedTextRange!.isEmpty{
-//            deletedTextRange = self.textRange(from: self.position(from: deletedTextRange!.start, offset: -1)!, to: deletedTextRange!.start)
-//        }
-//        let deletedText = self.text(in: deletedTextRange!)
-//        print("delete",deletedTextRange,deletedText)
-//        if myUndoManager?.isUndoRegistrationEnabled ?? false{
-//            if let undoManager = myUndoManager{
-//                undoManager.registerUndo(withTarget: self, handler: { _ in
-//                    if let target = undoManager.target{
-//                        undoManager.registerUndo(withTarget: self, handler: { _ in
-//                            target.selectedTextRange = textRange
-//                            target.deleteBackward()
-//                        })
-//                        undoManager.disableUndoRegistration()
-//                        target.selectedTextRange = target.textRange(from: deletedTextRange!.start, to: deletedTextRange!.start)
-//                        target.insertText(deletedText!)
-//                        undoManager.enableUndoRegistration()
-//                    }
-//                })
-//                
-//            }
-//        }
         super.deleteBackward()
+    }
+    func nsRange(from textRange: UITextRange) -> NSRange {
+        let location = offset(from: beginningOfDocument, to: textRange.start)
+        let length = offset(from: textRange.start, to: textRange.end)
+        return NSRange(location: location, length: length)
     }
     
     public override func replace(_ range: UITextRange, withText text: String) {
-        print("replace")
         if myUndoManager?.isUndoRegistrationEnabled ?? false{
             myUndoManager?.addInsertUndo(textRange: range, text: text, textView: self)
         }
+        super.smartQuotesType = .no
         super.replace(range, withText: text)
-//        let oldText = self.text(in: range) ?? "\"\""
-//        print("replace",range,text,oldText)
-//        super.replace(range, withText: text)
-//        print(self.text)
-//        invalidateCachedParagraphs()
-//        setNeedsDisplay()
     }
     
     var onPasteCompletion:(()->Void)?
@@ -374,91 +327,6 @@ public class InnerTextView: TextView {
     func replaceAll(key:String, to replaceText:String, options: ContentSearchOptions,callback:@escaping () -> Void){
         parent?.replaceAll(key: key, to: replaceText, options: options, callback: callback)
     }
-    
-//    override func replaceAllOccurrences(ofQueryString queryString: String, using options: UITextSearchOptions, withText replacementText: String) {
-//        print("replaceAll",queryString,options,replacementText)
-//        if #available(iOS 16.0, *) {
-//            super.replaceAllOccurrences(ofQueryString: queryString, using: options, withText: replacementText)
-//        } else {
-//            // Fallback on earlier versions
-//        }
-//    }
-    
-//    override func insertText(_ text: String) {
-//        // 保存当前的状态以便撤销
-//        let text = text
-//        if text.isEmpty{return}
-//        let insertTextRange = self.selectedTextRange
-//        if insertTextRange == nil {return}
-//        let oldText = self.text(in: insertTextRange!) ?? ""
-//        let newTextRange = self.textRange(from: self.position(from: insertTextRange!.start, offset: 0)!, to: self.position(from: insertTextRange!.start, offset: text.count-1)!)
-//        if let newTextRange{
-//            self.undoManager?.registerUndo(withTarget: self) { target in
-//                // 执行撤销操作
-//                self.undoManager?.disableUndoRegistration()
-//                target.replace(newTextRange, withText: oldText)
-//                self.undoManager?.enableUndoRegistration()
-//            }
-//        }
-//        super.insertText(text)
-//    }
-//    
-//    
-//    override func deleteBackward() {
-//        var deletedTextRange = self.selectedTextRange
-//        if deletedTextRange == nil {return}
-//        if deletedTextRange!.start == self.beginningOfDocument{return}
-//        if deletedTextRange!.isEmpty{
-//            deletedTextRange = self.textRange(from: self.position(from: deletedTextRange!.start, offset: -1)!, to: self.position(from: deletedTextRange!.start, offset: 0)!)
-//        }
-//        let deletedText = self.text(in: deletedTextRange!)
-//        
-//        if let deletedText = deletedText {
-//            self.undoManager?.registerUndo(withTarget: self) { target in
-//                self.undoManager?.disableUndoRegistration()
-//                target.insertText(deletedText)
-//                self.undoManager?.enableUndoRegistration()
-//            }
-//        }
-//        
-//        super.deleteBackward()
-//    }
-    
-//    override func paste(_ sender: Any?) {
-//        let previousText = self.text
-//        let selectedRange = self.selectedRange
-//        
-//        self.undoManager?.registerUndo(withTarget: self) { target in
-//            target.text = previousText
-//            target.selectedRange = selectedRange
-//        }
-//        
-//        super.paste(sender)
-//    }
-//    
-//    override func cut(_ sender: Any?) {
-//        let cutText = self.text(in: self.selectedTextRange!)
-//        
-//        if let cutText = cutText {
-//            self.undoManager?.registerUndo(withTarget: self) { target in
-//                target.insertText(cutText)
-//            }
-//        }
-//        
-//        super.cut(sender)
-//    }
-    
-//    override func replace(_ range: UITextRange, withText text: String) {
-//        let previousText = self.text(in: range)
-//        
-//        if let previousText = previousText {
-//            self.undoManager?.registerUndo(withTarget: self) { target in
-//                target.replace(range, withText: previousText)
-//            }
-//        }
-//        
-//        super.replace(range, withText: text)
-//    }
 	
 }
 enum ActionType{
@@ -478,15 +346,9 @@ struct UndoHistory{
 }
 public class MyUndoManager:UndoManager{
     public unowned var target:InnerTextView?
-//    private var lastAction:UndoHistory?
-//    private var taskQueue = DispatchQueue (label: "undoHistoryOps", qos: .userInitiated)
-//    private var timer:Timer
-//    private var isGrouping:Bool = false
-//    private var disabled:Bool = false
     
     public init(target: InnerTextView? = nil) {
         self.target = target
-//        timer = .scheduledTimer(withTimeInterval: 0.1, repeats: false, block: {_ in})
         super.init()
     }
     
@@ -503,9 +365,11 @@ public class MyUndoManager:UndoManager{
                             }
                         }
                         self.disableUndoRegistration()
-                        //                    self.disabled = true
-                        target.replace(history.newRange, withText: history.oldText)
-                        //                    self.disabled = false
+                        let attributedText = NSMutableAttributedString(attributedString: target.attributedText)
+                        attributedText.replaceCharacters(in: target.nsRange(from: history.newRange), with: history.oldText)
+                        target.attributedText = attributedText
+                        // 使用replace方法会出现诡异的问题：自动将部分半角单引号换成全角的了。
+//                        target.replace(history.newRange, withText: history.oldText)
                         self.enableUndoRegistration()
                     }
                 }
@@ -519,47 +383,14 @@ public class MyUndoManager:UndoManager{
                             }
                         }
                         self.disableUndoRegistration()
-                        //                    self.disabled = true
                         target.selectedTextRange = history.newRange
                         target.insertText(history.oldText)
-                        //                    self.disabled = false
                         self.enableUndoRegistration()
                     }
                 }
-//            case .replace,.paste:
-//                self.registerUndo(withTarget: target) { _ in
-//                    self.registerUndo(withTarget: target) { _ in
-//                        target.replace(history.oldRange, withText: history.newText)
-//                    }
-//                    self.disableUndoRegistration()
-//                    target.replace(history.newRange, withText: history.oldText)
-//                    self.enableUndoRegistration()
-//                }
             }
         }
     }
-    
-//    private func delayEndGroup(){
-//        timer.invalidate()
-//        timer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: {[weak self] _ in
-//            guard let self else{return}
-//            lastAction = nil
-//            self.endUndoGrouping()
-//        })
-//    }
-    
-//    override public func beginUndoGrouping() {
-//        guard !isGrouping else{return}
-//        isGrouping = true
-//        super.beginUndoGrouping()
-//    }
-//    
-//    override public func endUndoGrouping() {
-//        guard isGrouping else{return}
-//        isGrouping = false
-//        super.endUndoGrouping()
-//    }
-//    
     override public func undo() {
         if #available(iOS 17.4, *){
             print(self.undoCount)
@@ -590,26 +421,11 @@ public class MyUndoManager:UndoManager{
     }
     
     public func addInsertUndo(textRange:UITextRange,text:String,textView:InnerTextView){
-//        guard !disabled else{return}
         if let pos = textView.position(from: textRange.start, offset: text.count){
             if let newRange=textView.textRange(from: textRange.start, to: pos){
                 if let oldText = textView.text(in: textRange){
                     let history = UndoHistory(action: .insert, oldRange: textRange, newRange: newRange, oldText: oldText, newText: text)
                     regUndo(history: history)
-//                    if lastAction == nil{
-//                        self.beginUndoGrouping()
-//                        regUndo(history: history)
-//                    }
-//                    else if lastAction!.action == .insert && history.oldText.isEmpty && lastAction!.newRange.end == textRange.start{
-//                        regUndo(history: history)
-//                    }
-//                    else{
-//                        self.endUndoGrouping()
-//                        regUndo(history: history)
-//                        self.beginUndoGrouping()
-//                    }
-//                    lastAction = history
-//                    delayEndGroup()
                 }
             }
         }
@@ -617,35 +433,22 @@ public class MyUndoManager:UndoManager{
     
     public func addDeleteUndo(textRange:UITextRange,textView:InnerTextView){
         var newRange:UITextRange
-        if textRange.isEmpty{
-            if textRange.start == textView.beginningOfDocument{return}
-            newRange = textView.textRange(from: textView.position(from: textRange.start, offset: -1)!, to: textRange.start)!
+        var oldRange = textRange
+        if oldRange.isEmpty{
+            if oldRange.start == textView.beginningOfDocument{return}
+            oldRange = textView.textRange(from: textView.position(from: oldRange.start, offset: -1)!, to: oldRange.start)!
+            newRange = textView.textRange(from: oldRange.start, to: oldRange.start)!
         }
         else{
-            newRange = textView.textRange(from: textRange.start, to: textRange.start)!
+            newRange = textView.textRange(from: oldRange.start, to: oldRange.start)!
         }
-        if let oldText = textView.text(in: textRange){
+        if let oldText = textView.text(in: oldRange){
             let history = UndoHistory(action: .delete, oldRange: textRange, newRange: newRange, oldText: oldText, newText: "")
             regUndo(history: history)
-//            if lastAction == nil{
-//                self.beginUndoGrouping()
-//                regUndo(history: history)
-//            }
-//            else if lastAction!.action == .delete && lastAction!.newRange == textRange{
-//                regUndo(history: history)
-//            }
-//            else{
-//                self.endUndoGrouping()
-//                regUndo(history: history)
-//                self.beginUndoGrouping()
-//            }
-//            lastAction = history
-//            delayEndGroup()
         }
     }
     
     public func registerUndo(withTarget target: MyUndoManager, handler: @escaping (MyUndoManager) -> Void) {
-        print("ttt")
         super.registerUndo(withTarget: target, handler: handler)
     }
 }
