@@ -769,6 +769,7 @@ open class SyntaxTextView: _View {
                         print("已更改")
                         return
                     }
+                    guard range.lowerBound>=0 && range.upperBound<text.count else{continue}
                     textStorage.addAttributes(attr, range: range)
                 }
                 textStorage.endEditing()
@@ -812,6 +813,11 @@ open class SyntaxTextView: _View {
         }
     }
     private(set) var selectedSearchResultIndex:Int = 0
+    
+    func clearSearchResult(){
+        self.searchResult = []
+        onSearchResult(0)
+    }
     
     public func jumpToSearchResult(for index:Int,getFocus:Bool=false){
         let index = min(index,searchResult.count-1)
@@ -930,15 +936,37 @@ open class SyntaxTextView: _View {
     
     private var searchTimer:Timer?
     
-    func search(){
+    func search(allowDelay:Bool=true){
         searchTimer?.invalidate()
         if searchKey.isEmpty{
             isSearching = true
             searchResult = []
             return
         }
-        searchTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { [weak self]_ in
-            guard let self else{return}
+        if allowDelay{
+            searchTimer = .scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { [weak self]_ in
+                guard let self else{return}
+                guard let source = textView.text else{return}
+                isSearching = true
+                searchText(key: searchKey, options: searchOptions, source: source) { key,result in
+                    DispatchQueue.main.async {[weak self] in
+                        guard let self else{return}
+                        if key != self.searchKey{
+                            print("关键词已更改")
+                            return
+                        }
+                        //                    self.isSearching = false
+                        self.searchResult = result
+                        //                    self.onSearchResult(result.count)
+                        if result.count > 0 && !isFirstResponder{
+                            self.jumpToSearchResult(for: 0, getFocus: false)
+                        }
+                    }
+                }
+            })
+            
+        }
+        else{
             guard let source = textView.text else{return}
             isSearching = true
             searchText(key: searchKey, options: searchOptions, source: source) { key,result in
@@ -948,15 +976,13 @@ open class SyntaxTextView: _View {
                         print("关键词已更改")
                         return
                     }
-//                    self.isSearching = false
                     self.searchResult = result
-//                    self.onSearchResult(result.count)
                     if result.count > 0 && !isFirstResponder{
                         self.jumpToSearchResult(for: 0, getFocus: false)
                     }
                 }
             }
-        })
+        }
     }
     
     private func range(from nsRange: NSRange, in string: String) -> Range<String.Index>? {
@@ -1027,36 +1053,14 @@ open class SyntaxTextView: _View {
                     source = re.stringByReplacingMatches(in: source, range: NSRange(location: 0, length: source.count), withTemplate: replaceText)
                 }
                 print("Step2.\(Date().timeIntervalSince1970)")
-                self.searchResult = []
+//                self.searchResult = []
                 DispatchQueue.main.async {[weak self] in
                     guard let self else{return}
                     isSearching = false
-                    onSearchResult(self.searchResult.count)
-                    ignoreTextChange = true
+//                    onSearchResult(self.searchResult.count)
                     print("Step4.\(Date().timeIntervalSince1970)")
-                    if let undoManager = textView.myUndoManager,undoManager.isUndoRegistrationEnabled{
-                        let oldText = self.textView.text
-                        undoManager.registerUndo(withTarget: undoManager, handler: {this in
-                            guard let target = this.target else { return }
-                            
-                            // 执行撤销操作，同时将替换操作保存为 redo 操作
-                            this.registerUndo(withTarget: this, handler: { this in
-                                guard let target = this.target else { return }
-                                target.replaceAll(key: key, to: replaceText, options: options, callback: {})
-                            })
-                            this.disableUndoRegistration()
-                            // 替换为旧文本
-                            target.textStorage.replaceCharacters(in: .init(location: 0, length: target.text.count), with: oldText ?? "")
-                            this.enableUndoRegistration()
-                        })
-                    }
-                    textView.textStorage.replaceCharacters(in: .init(location: 0, length: textView.text.count), with: source)
+                    textView.replaceAll(newText: source)
                     print("Step5.\(Date().timeIntervalSince1970)")
-                    delegate?.didChangeText(self)
-                    jumpToSearchResult(for: -1)
-                    refreshColors(allowDelay: false)
-                    ignoreTextChange = false
-                    print("Step6.\(Date().timeIntervalSince1970)")
                 }
                 print("Step3.\(Date().timeIntervalSince1970)")
                 callback()

@@ -285,7 +285,6 @@ public class InnerTextView: TextView {
                         if let newRange = self.textRange(from: textRange.start, to: self.position(from: textRange.start, offset: newText.count)!){
                             self.myUndoManager?.addPasteUndo(oldRange: textRange, oldText: oldText, newRange: newRange, newText: newText)
                         }
-                        print("parse",newText)
                     }
                     
                     self.onPasteCompletion = nil
@@ -324,8 +323,35 @@ public class InnerTextView: TextView {
         }
     }
     
-    func replaceAll(key:String, to replaceText:String, options: ContentSearchOptions,callback:@escaping () -> Void){
-        parent?.replaceAll(key: key, to: replaceText, options: options, callback: callback)
+    func replaceAll(newText:String){
+        let oldRange = selectedTextRange
+        if let undoManager = myUndoManager,undoManager.isUndoRegistrationEnabled{
+            let oldText = self.text
+            undoManager.registerUndo(withTarget: undoManager, handler: {this in
+                guard let target = this.target else { return }
+                
+                // 执行撤销操作，同时将替换操作保存为 redo 操作
+                this.registerUndo(withTarget: this, handler: { this in
+                    guard let target = this.target else { return }
+                    target.replaceAll(newText: newText)
+                })
+                this.disableUndoRegistration()
+                // 替换为旧文本
+                target.textStorage.replaceCharacters(in: .init(location: 0, length: target.text.count), with: oldText ?? "")
+                this.enableUndoRegistration()
+                target.selectedTextRange = oldRange
+                DispatchQueue.main.async{
+                    target.parent?.didUpdateText(allowDelay: false)
+                }
+            })
+        }
+        parent?.clearSearchResult()
+        parent?.ignoreTextChange = true
+        textStorage.replaceCharacters(in: .init(location: 0, length: text.count), with: newText)
+        parent?.delegate?.didChangeText(parent!)
+        parent?.jumpToSearchResult(for: -1)
+        parent?.refreshColors(allowDelay: false)
+        parent?.ignoreTextChange = false
     }
 	
 }
@@ -362,6 +388,7 @@ public class MyUndoManager:UndoManager{
                             if let target = this.target{
                                 target.selectedTextRange = history.oldRange
                                 target.insertText(history.newText)
+                                target.parent?.didUpdateText(allowDelay: false)
                             }
                         }
                         self.disableUndoRegistration()
@@ -371,6 +398,10 @@ public class MyUndoManager:UndoManager{
                         // 使用replace方法会出现诡异的问题：自动将部分半角单引号换成全角的了。
 //                        target.replace(history.newRange, withText: history.oldText)
                         self.enableUndoRegistration()
+                        target.selectedTextRange = history.oldRange
+                        DispatchQueue.main.async{
+                            target.parent?.didUpdateText(allowDelay: false)
+                        }
                     }
                 }
             case .delete,.cut:
@@ -380,12 +411,16 @@ public class MyUndoManager:UndoManager{
                             if let target = this.target{
                                 target.selectedTextRange = history.oldRange
                                 target.deleteBackward()
+                                target.parent?.didUpdateText(allowDelay: false)
                             }
                         }
                         self.disableUndoRegistration()
                         target.selectedTextRange = history.newRange
                         target.insertText(history.oldText)
                         self.enableUndoRegistration()
+                        DispatchQueue.main.async{
+                            target.parent?.didUpdateText(allowDelay: false)
+                        }
                     }
                 }
             }

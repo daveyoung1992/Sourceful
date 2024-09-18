@@ -154,6 +154,18 @@ extension SyntaxTextView {
 		
 	}
     
+    func didUpdateText(allowDelay:Bool) {
+        if !ignoreTextChange{
+            if self.enableSearch && !self.searchKey.isEmpty{
+                self.search(allowDelay:allowDelay)
+            }
+            else{
+                refreshColors(allowDelay: allowDelay)
+            }
+        }
+        delegate?.didChangeText(self)
+    }
+    
     func didUpdateText() {
         if !ignoreTextChange{
             if self.enableSearch && !self.searchKey.isEmpty{
