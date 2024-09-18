@@ -762,6 +762,7 @@ open class SyntaxTextView: _View {
                     print("已更改")
                     return
                 }
+                let count = text.count
                 textStorage.beginEditing()
                 textStorage.setAttributes(attributes, range: wholeRange)
                 for (attr, range) in attributesToAdd {
@@ -769,7 +770,7 @@ open class SyntaxTextView: _View {
                         print("已更改")
                         return
                     }
-                    guard range.lowerBound>=0 && range.upperBound<text.count else{continue}
+                    guard range.lowerBound>=0 && range.upperBound<count else{continue}
                     textStorage.addAttributes(attr, range: range)
                 }
                 textStorage.endEditing()
