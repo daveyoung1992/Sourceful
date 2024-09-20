@@ -329,7 +329,7 @@ public class InnerTextView: TextView {
             let oldText = self.text
             undoManager.registerUndo(withTarget: undoManager, handler: {this in
                 guard let target = this.target else { return }
-                
+                this.isBusy = true
                 // 执行撤销操作，同时将替换操作保存为 redo 操作
                 this.registerUndo(withTarget: this, handler: { this in
                     guard let target = this.target else { return }
@@ -341,7 +341,10 @@ public class InnerTextView: TextView {
                 this.enableUndoRegistration()
                 target.selectedTextRange = oldRange
                 DispatchQueue.main.async{
-                    target.parent?.didUpdateText(allowDelay: false)
+                    if !(target.parent?.ignoreTextChange ?? true){
+                        target.parent?.didUpdateText(allowDelay: false)
+                    }
+                    this.isBusy = false
                 }
             })
         }
@@ -378,17 +381,22 @@ public class MyUndoManager:UndoManager{
         super.init()
     }
     
+    fileprivate var isBusy:Bool = false
+    
     private func regUndo(history:UndoHistory){
         if let target{
             switch history.action {
             case .insert,.replace,.paste:
                 self.registerUndo(withTarget: self) { this in
                     if let target = this.target{
+                        this.isBusy = true
                         self.registerUndo(withTarget: this) { this in
                             if let target = this.target{
+                                this.isBusy = true
                                 target.selectedTextRange = history.oldRange
                                 target.insertText(history.newText)
                                 target.parent?.didUpdateText(allowDelay: false)
+                                this.isBusy = false
                             }
                         }
                         self.disableUndoRegistration()
@@ -400,18 +408,24 @@ public class MyUndoManager:UndoManager{
                         self.enableUndoRegistration()
                         target.selectedTextRange = history.oldRange
                         DispatchQueue.main.async{
-                            target.parent?.didUpdateText(allowDelay: false)
+                            if !(target.parent?.ignoreTextChange ?? true){
+                                target.parent?.didUpdateText(allowDelay: false)
+                            }
+                            this.isBusy = false
                         }
                     }
                 }
             case .delete,.cut:
                 self.registerUndo(withTarget: self) { this in
                     if let target = this.target{
+                        this.isBusy = true
                         self.registerUndo(withTarget: this) { this in
                             if let target = this.target{
+                                this.isBusy = true
                                 target.selectedTextRange = history.oldRange
                                 target.deleteBackward()
                                 target.parent?.didUpdateText(allowDelay: false)
+                                this.isBusy = false
                             }
                         }
                         self.disableUndoRegistration()
@@ -419,35 +433,35 @@ public class MyUndoManager:UndoManager{
                         target.insertText(history.oldText)
                         self.enableUndoRegistration()
                         DispatchQueue.main.async{
-                            target.parent?.didUpdateText(allowDelay: false)
+                            if !(target.parent?.ignoreTextChange ?? true){
+                                target.parent?.didUpdateText(allowDelay: false)
+                            }
+                            this.isBusy = false
                         }
                     }
                 }
             }
         }
     }
-    override public func undo() {
-        if #available(iOS 17.4, *){
-            print(self.undoCount)
-            if self.undoCount == 0{
-                self.removeAllActions()
-            }
-        }
-        
-        super.undo()
-        if #available(iOS 17.4, *){
-            print(self.undoCount)
-        }
+    
+    override public var canRedo: Bool{
+        if isBusy || isRedoing || isUndoing {return false}
+        return super.canRedo
     }
-//    
+    
+    override public var canUndo: Bool{
+        if isBusy || isRedoing || isUndoing {return false}
+        return super.canUndo
+    }
+    
+    override public func undo() {
+        if isBusy || isRedoing || isUndoing {return}
+        super.undo()
+    }
+    
     override public func redo() {
-        if #available(iOS 17.4, *){
-            print(self.undoCount)
-        }
+        if isBusy || isRedoing || isUndoing {return}
         super.redo()
-        if #available(iOS 17.4, *){
-            print(self.undoCount)
-        }
     }
     
     public func addPasteUndo(oldRange:UITextRange,oldText:String, newRange:UITextRange, newText:String){

@@ -1100,6 +1100,26 @@ open class SyntaxTextView: _View {
             refreshColors(allowDelay: false)
         }
     }
+    func startUndo(){
+        ignoreTextChange = true
+        textView.undo()
+    }
+    func stopUndo(){
+        restoreDefaultAttributes()
+        delegate?.didChangeText(self)
+        refreshColors(allowDelay: false)
+        ignoreTextChange = false
+    }
+    func startRedo(){
+        ignoreTextChange = true
+        textView.redo()
+    }
+    func stopRedo(){
+        restoreDefaultAttributes()
+        delegate?.didChangeText(self)
+        refreshColors(allowDelay: false)
+        ignoreTextChange = false
+    }
 }
 //extension String {
 //    func replaceOccurrencesWithNSRange(_ ranges: [NSRange], replaceTo: String) -> String {

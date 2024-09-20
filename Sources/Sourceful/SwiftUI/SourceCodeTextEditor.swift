@@ -295,6 +295,22 @@ extension SourceCodeTextEditor{
     public func redo(){
         textView.redo()
     }
+    
+    public func startUndo(){
+        textView.startUndo()
+    }
+    
+    public func startRedo(){
+        textView.startRedo()
+    }
+    
+    public func stopUndo(){
+        textView.stopUndo()
+    }
+    
+    public func stopRedo(){
+        textView.stopRedo()
+    }
 }
 
 #endif
